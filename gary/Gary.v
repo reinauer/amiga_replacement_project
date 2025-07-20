@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 ////////////////////////////////////////////////////////////////////////////////// 
 // 
 // Company:        The Buffee Project Inc.
@@ -18,6 +17,7 @@
 // Revision:       0.01 - File Created
 //                 0.20 - First working version (>90% boots pass)
 //                 0.21 - Added waitstates for RTC and BGACK
+//                 0.30 - Complete rework. Matches original Gary behaviour in 99.999%. Influence of BGACK is unclear
 // 
 ////////////////////////////////////////////////////////////////////////////////// 
 module Gary(           //                     ACTV HANDLED
@@ -34,7 +34,7 @@ module Gary(           //                     ACTV HANDLED
     input nDKWE,       //  9  NDKWE   IN      HI   n/a     Disk write enable
     input nLDS,        // 10  NLDS    IN      LO   n/a     68000 lower byte data strobe
     input nUDS,        // 11  NUDS    IN      LO   n/a     68000 upper byte data strobe
-    input PRnW,        // 12  PPRnW   IN      LO   n/a     68000 write enable
+    input RW,          // 12  PPRnW   IN      LO   n/a     68000 write enable
     input nAS,         // 13  NAS     IN      LO   n/a     68000 Adress strobe
     input nBGACK,      // 14  NBGACK  IN      LO   n/a     Bus grant acknowledge; add 1WS
     input nDBR,        // 15  NDBR    IN      LO   n/a     DMA bus request 
@@ -74,16 +74,19 @@ module Gary(           //                     ACTV HANDLED
 );
 
     // internal registers
-    reg nDBR_D0, nDTACK_S, nCDR_S, nCDW_S,nBLS_S, MTR0_S;
-    reg [2:0] COUNT;    // Cycle counter for CPU-state alignment
-    reg [2:0] nWAIT;    // Wait-states for clock and Zorro access
-
+    reg nDTACK_S, nCDR_S, nCDW_S, MTR0_S,nBUS_ACCESS;
+	reg [3:0]C1_D;
+	reg [3:0]C3_D;
+	reg [3:0]nAS_QUAL;
+	reg GO;
+	reg nRAME_S, nRGAE_S;
+	localparam [3:0] PHASE=1; 
     // RESET is open-drain, input/output (IOBUFE)
     assign nRESET = nKRES ? 1'bz : 1'b0;
     // HALT is open-drain, output only
     assign nHALT = nRESET ? 1'bz : 1'b0;
     // Global ENABLE signal
-    wire ENABLE = nRESET & nOVR & ~nAS;
+    wire ENABLE = nRESET & nOVR & ~nAS ;
     // DTACK is tri-state, output only
     assign nDTACK = ENABLE ? nDTACK_S : 1'bz;
 
@@ -93,7 +96,9 @@ module Gary(           //                     ACTV HANDLED
     wire DS = ~nUDS | ~nLDS;                // Either data select
     
     // ADDRESS DECODE
-    wire CHIPRAM    = (~OVL & A[23:21]==3'b000);  //    000000-1FFFFF
+    wire CHIPRAM    = (~OVL & A[23:21]==3'b000)   //    000000-1FFFFF
+					| (~nEXP &                    // expansion present and
+                     (A[23:19]==5'b11000));       //    C00000-C7FFFF ranger
     
     wire ROM        = ((OVL & A[23:21]==3'b000)   // ROM overlay during start
                     | (A[23:19]==5'b1111_1)       // or F80000-FFFFFF
@@ -103,14 +108,8 @@ module Gary(           //                     ACTV HANDLED
     
     wire CLOCK      = A[23:17]==7'b1101_110;      //    DC0000-DDFFFF clock
     
-    wire CHIPSET    = nEXP &                      // expansion absent
-                     ((A[23:20]==4'b1100)         // or C00000-CFFFFF
-                    | (A[23:19]==5'b1101_0))      // or D00000-D7FFFF
-                    | (A[23:17]==7'b1101_111);    // or DE0000-DFFFFF chipset
-                    
-    wire RANGER     = ~nEXP &                     // expansion present
-                     ((A[23:20]==4'b1100)         // or C00000-CFFFFF ranger (low)
-                    | (A[23:19]==5'b1101_0));     // or D00000-D7FFFF ranger (high)
+    wire CHIPSET    = nEXP & (A[23:19]==5'b11001) // expansion absent and C00000-C7FFFF
+                    | (A[23:17]==7'b1101_111);    // or DE0000-DFFFFF chipset                    				
         
     // assign simple signals
     assign DKWDB = ~nDKWD;
@@ -118,70 +117,92 @@ module Gary(           //                     ACTV HANDLED
     assign MTRXD = ~nMTR & nRESET;
     assign MTR0D = MTR0_S;
     
-    wire nBLIT = nDBR_D0 & nDBR;
-    wire AGNUS = CHIPRAM | RANGER | CHIPSET;
+    wire AGNUS = CHIPRAM | CHIPSET;
     
     // select floppy motor
-    always @(negedge nSEL0, negedge nRESET)
+    always @(negedge nSEL0, negedge nRESET) 
         MTR0_S <= (nRESET==0) ? 0 : ~nMTR;
     
+	always @(negedge nCDAC)
+	begin
+		//this replaces the nasty latch!
+		nLATCH	<=	C3;
+	end
+	
     // decode address and generate the internal signals
     always @(posedge C14M) begin
-        // this replaces the nasty latch!
-        nLATCH  <= C3;
-        nDBR_D0 <= nDBR;
-        
-        if(nAS | (nRESET==0)) begin
+		C1_D <= {C1_D[2:0],C1};
+		C3_D <= {C3_D[2:0],C3};		
+        if(nAS | ~nRESET) begin
             nDTACK_S    <= 1;
             nCDR_S      <= 1;
             nCDW_S      <= 1;
-            nBLS_S      <= 1;
-            
-            COUNT       <= 0;
-            
-            if(CLOCK)       nWAIT <= 3'b111; // 3 waits
-            else if(nBGACK) nWAIT <= 3'b100; // 1 wait
-            else            nWAIT <= 3'b000; // no waits
-            
-        end else begin
-            // Track out wait states
-            nWAIT <= { nWAIT[1:0], 1'b0 };
-        
-            // count 7Mhz-flanks: odd falling even rising
-            // the cycle starts at S3: this time the first cycle is seen!
-            // ergo, this should be 0 (read) at S3 when C7M should be low
-            COUNT[0] <= C3; // C7M;
-            COUNT[2:1] <= COUNT[2:1] + COUNT[0];
-            
+			nBUS_ACCESS <= 1;
+			nAS_QUAL <= 4'b1111;			
+			GO <= 1;
+			nRAME_S <= 1;
+			nRGAE_S <= 1;
+        end 
+		else begin
+		
+			if(~C3_D[PHASE] & ~C1_D[PHASE] & nAS_QUAL == 4'b1111) 
+				nAS_QUAL <= 4'b0000;
+			else 
+				if (nAS_QUAL != 4'b1111);
+					nAS_QUAL <=  nAS_QUAL + 1;
+		
+			if(nAS_QUAL == 4'b0010 & CHIPRAM)
+				nRAME_S <= 0;
+
+			if(nAS_QUAL == 4'b0010 & CHIPSET)
+				nRGAE_S <= 0;
+
+		
+			if( (nDBR & nDTACK_S & ~C1_D[PHASE] & C3_D[PHASE] & AGNUS)
+				|(~nBUS_ACCESS & ~C1_D[PHASE] & ~C3_D[PHASE])
+				) 
+				nBUS_ACCESS <= 0;
+			else
+				nBUS_ACCESS <= 1;
+		            
             // assert DTACK when ready
-            if ((~nBLIT & AGNUS ) | CIA & nDTACK_S)
-                nDTACK_S <= 1;
-            else 
-                nDTACK_S <= nWAIT[2] | ~XRDY;
+			if(   (~nBUS_ACCESS & ~C3_D[PHASE])
+				| (XRDY & ((~CIA & ~AGNUS)|~nDTACK_S)) // XRDY high and all others except CIA or hold
+				)
+				nDTACK_S <= 0;
+			else
+				nDTACK_S <= 1;
             
-            // slow down blitter
-            nBLS_S <= ~(AGNUS & (COUNT[1:0]>=2'b00 & COUNT[1:0]<=2'b01));
+
 
             // read from RAM / register  
-            if((COUNT >= 8'h01) & PRnW & nBLIT & AGNUS & nCDR_S)
+            if(~nBUS_ACCESS // Agnus and access granted
+				& RW //read
+				&C1_D[PHASE] 
+				)
                 nCDR_S  <= 0;
-            
+				
             // write to RAM / register
-            if(~PRnW & nBLIT & AGNUS & nCDW_S)
+			if(	(~nBUS_ACCESS //Agnus and access granted
+				& ~RW) //write
+				| (~nCDW_S & C1_D[PHASE])
+				)
                 nCDW_S  <= 0;
-
+			else 
+				nCDW_S  <= 1;
         end
     end
         
     // output signal generation
-    assign nVPA =   ENABLE ? ~CIA : 1;
-    assign nROME =  ENABLE ? ~(ROM & PRnW) : 1; // only on read!
-    assign nRTCR =  ENABLE ? ~(CLOCK &  PRnW & DS) : 1;
-    assign nRTCW =  ENABLE ? ~(CLOCK & ~PRnW & DS) : 1;
-    assign nRAME =  ENABLE ? ~(CHIPRAM | RANGER ) : 1;
+    assign nVPA =   ENABLE ? ~CIA : 1'bz;
+    assign nROME =  ENABLE ? ~(ROM & RW) : 1; // only on read!
+    assign nRTCR =  ENABLE ? ~(CLOCK &  RW & DS) : 1;
+    assign nRTCW =  ENABLE ? ~(CLOCK & ~RW & DS) : 1;
+    assign nRAME =  ~CHIPRAM;
+    assign nRGAE =  ~CHIPSET;
     assign nCDR  =  ENABLE ? nCDR_S : 1;
     assign nCDW  =  ENABLE ? nCDW_S : 1;
-    assign nRGAE =  ENABLE ? ~CHIPSET : 1;
-    assign nBLS  =  ENABLE ? nBLS_S : 1;
+	// slow down blitter
+    assign nBLS  =  nBUS_ACCESS;
 
 endmodule
