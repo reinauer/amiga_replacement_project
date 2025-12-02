@@ -72,7 +72,7 @@ assign w_cdac_fall = r_cdac_ph[2];
 
 */
 
-module Denise
+module denise
 (
   // Main clock
   input             clk,       // Master clock (28/56/85 MHz)
@@ -1020,16 +1020,7 @@ assign w_cpu_wr = r_wregs_clut_p1 & cdac_f & ~cck;
 // Color look-up table read strobe
 assign w_clut_rd = cdac_r | cdac_f;
 
-color_table U_color_table
-(
-  .clk(clk),
-  .cpu_wr(w_cpu_wr),
-  .cpu_idx(r_rga_p1[5:1]),
-  .cpu_rgb(db_in[11:0]),
-  .clut_rd(w_clut_rd),
-  .clut_idx(r_clut_idx_p6[4:0]),
-  .clut_rgb(w_clut_rgb_p7)
-);
+
 
 //////////////////////////////////
 // HAM and EHB modes management //
@@ -1142,74 +1133,6 @@ assign blank_n = r_blank_n_p10;
 
 endmodule
 
-////////////////////////
-// Color lookup table //
-////////////////////////
 
-// CLUT Latency is :
-// -----------------
-// 28 MHz : 1 cycle
-// CDAC_n : 0.5 cycles
-
-module color_table
-(
-  input         clk,
-  input         cpu_wr,
-  input   [4:0] cpu_idx,
-  input  [11:0] cpu_rgb,
-  input         clut_rd,
-  input   [4:0] clut_idx,
-  output [11:0] clut_rgb
-);
-
-`ifdef SIMULATION
-
-// Infered block RAM
-reg  [11:0] r_mem_clut [0:31];
-
-// Write port
-always@(posedge clk) begin
-  if (cpu_wr) begin
-    r_mem_clut[cpu_idx] <= cpu_rgb;
-  end
-end
-
-reg  [11:0] r_q_p0;
-reg  [11:0] r_q_p1;
-
-// Read port
-always@(posedge clk) begin
-  if (clut_rd)
-    r_q_p0 <= r_mem_clut[clut_idx];
-  r_q_p1 <= r_q_p0;
-end
-
-assign clut_rgb = r_q_p1;
-
-`else
-
-// Declared Altera block RAM
-altsyncram U_altsyncram_32x12
-(
-  // Port A : write side (Copper or CPU)
-  .clock0    (clk),
-  .wren_a    (cpu_wr),
-  .address_a (cpu_idx),
-  .data_a    (cpu_rgb),
-  // Port B : read side (Bitplanes or Sprites)
-  .clock1    (clk),
-  .rden_b    (clut_rd),
-  .address_b (clut_idx),
-  .q_b       (clut_rgb)
-);
-defparam 
-  U_altsyncram_32x12.operation_mode = "DUAL_PORT",
-  U_altsyncram_32x12.width_a        = 12,
-  U_altsyncram_32x12.widthad_a      = 5,
-  U_altsyncram_32x12.width_b        = 12,
-  U_altsyncram_32x12.widthad_b      = 5,
-  U_altsyncram_32x12.outdata_reg_b  = "CLOCK1";
-
-`endif
 
 endmodule
