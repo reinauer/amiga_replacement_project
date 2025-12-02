@@ -22,13 +22,13 @@ set_io ICE_SCK  K4
 set_io ICE_SS   L1
 
 # Denise Pins
-set_io D[6]     P8  # PIN 1
-set_io D[5]     M7  # PIN 2
-set_io D[4]     L8  # PIN 3
-set_io D[3]     P5  # PIN 4
-set_io D[2]     M6  # PIN 5
-set_io D[1]     P4  # PIN 6
-set_io D[0]     L6  # PIN 7
+set_io DB[6]    P8  # PIN 1
+set_io DB[5]    M7  # PIN 2
+set_io DB[4]    L8  # PIN 3
+set_io DB[3]    P5  # PIN 4
+set_io DB[2]    M6  # PIN 5
+set_io DB[1]    P4  # PIN 6
+set_io DB[0]    L6  # PIN 7
 set_io M1H      P3  # PIN 8
 set_io M0H      M3  # PIN 9
 set_io RGA[8]   P2  # PIN 10
@@ -61,12 +61,12 @@ set_io CCK      F12 # PIN 36
                     # PIN 37 GND
 set_io M0V      G12 # PIN 38 
 set_io M1V      H11 # PIN 39 
-set_io D[15]    H12 # PIN 40 
-set_io D[14]    K14 # PIN 41 
-set_io D[13]    J11 # PIN 42 
-set_io D[12]    L14 # PIN 43 
-set_io D[11]    J12 # PIN 44 
-set_io D[10]    K12 # PIN 45 
-set_io D[9]     G11 # PIN 46 
-set_io D[8]     M9  # PIN 47
-set_io D[7]     P9  # PIN 48
+set_io DB[15]   H12 # PIN 40 
+set_io DB[14]   K14 # PIN 41 
+set_io DB[13]   J11 # PIN 42 
+set_io DB[12]   L14 # PIN 43 
+set_io DB[11]   J12 # PIN 44 
+set_io DB[10]   K12 # PIN 45 
+set_io DB[9]    G11 # PIN 46 
+set_io DB[8]    M9  # PIN 47
+set_io DB[7]    P9  # PIN 48
