@@ -1,23 +1,7 @@
 //////////////////////////////////////////////////////////////////////////////////
-// Company: The Buffee Project
-// Engineer: Renee Cousins (renee.cousins@buffee.ca)
 //
-// Create Date:    13:13:40 03/07/2022
-// Design Name:
-// Module Name:    Denise_8373
-// Project Name:   MiniMig 2
-// Target Devices: Any
-// Tool versions:  ISE13.4
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-// Initial source taken from the MCC-216 project
 // Copyright 2011, 2012 Frederic Requin; part of the MCC216 project
+// Copyright 2025 Renee Cousins; part of the Buffee/ARP Project
 //
 //////////////////////////////////////////////////////////////////////////////////
 //
@@ -25,7 +9,7 @@
 // - verify priority logic
 //
 
-module Denise_8373(
+module main(
     // Standard Denise Signals
     //                             Pin        Used Active  Description
     inout      [15:0] DB,       // 1-7, 40-48       High    Data bus input
@@ -35,8 +19,8 @@ module Denise_8373(
     output           nBURST,    //  18         No   Low     Colour burst
     //                Vdd           19         No   Pwr     Common 5V supply
     output reg  [3:0] RED,      // 20-23            High    Red component output
-    output reg  [3:0] GREEN,    // 24-27            High    Green component output
-    output reg  [3:0] BLUE,     // 28-31            High    Blue component output   
+    output reg  [3:0] GRN,      // 24-27            High    GRN component output
+    output reg  [3:0] BLU,      // 28-31            High    BLU component output   
     input            nCBL,      //  32         No   Low     Composite blanking
     output reg       nZD,       //  33              Low     Background indicator
     input            nCDAC,     //  34              Clk     7.1MHz Quadrature clock
@@ -65,24 +49,24 @@ module Denise_8373(
 */
     genvar i;
 
-    reg [15:0] r_DB_out;
-    wire       r_DB_out_en;
+    reg [15:0]  r_DB_out;
+    wire        r_DB_out_en;
 
     assign DB = r_DB_out_en ? r_DB_out : 16'hz;
 
-    reg [10:0] r_HCOUNT;
+    reg [10:0]  r_HCOUNT;
     
-    wire [5:0] w_BPLxDAT;
-    wire [7:0] w_SPRxDATA;
-    wire [7:0] w_SPRxDATB;
-    wire [7:0] w_SPRxENA;
-    wire [3:0] w_SPRxGROUP;
-    wire [4:0] w_SPRxCOLOR      [0:7];
+    wire [5:0]  w_BPLxDAT;
+    wire [7:0]  w_SPRxDATA;
+    wire [7:0]  w_SPRxDATB;
+    wire [7:0]  w_SPRxENA;
+    wire [3:0]  w_SPRxGROUP;
+    wire [4:0]  w_SPRxCOLOR     [0:7];
     wire [15:0] w_CLXDAT;
     
     reg [15:0] r_BPLxDAT        [0:5];
     reg [15:0] r_BPLxDAT_pixel  [0:5];
-    reg [15:0] r_BPLxDAT_latch  [0:5];
+    reg [15:0] r_BPLxDAT_latch;
     reg [15:0] r_SPRxDATA       [0:7];
     reg [15:0] r_SPRxDATB       [0:7];
     reg [15:0] r_SPRxDATA_latch [0:7];
@@ -145,9 +129,9 @@ module Denise_8373(
         ~w_PRI_IN[8] ? 4'b1001 : // playfield match 100
                        4'b1111);
 
-    wire [5:0] w_SPRxCOL = w_SPRxENA[w_PRI_OUT[2:1], 1'b0]
-        ? w_SPRxCOLOR[w_PRI_OUT[2:1], 1'b0]
-        ? w_SPRxCOLOR[w_PRI_OUT[2:1], 1'b1];
+    wire [5:0] w_SPRxCOL = w_SPRxENA  [{w_PRI_OUT[2:1], 1'b0}]
+                         ? w_SPRxCOLOR[{w_PRI_OUT[2:1], 1'b0}]
+                         : w_SPRxCOLOR[{w_PRI_OUT[2:1], 1'b1}];
 
     wire w_PFAxTOP = w_PRI_OUT[3:1] == w_PFAxPRI;
     wire w_PFBxTOP = w_PRI_OUT[3:1] == w_PFBxPRI;
@@ -171,10 +155,10 @@ module Denise_8373(
     
     always @(posedge C14M) begin
         // Push the pixels
-        if (w_HAM && (r_COLOR_SEL[5:4] == 2'b11)) GREEN = r_COLOR_SEL[3:0];
+             if (w_HAM && (r_COLOR_SEL[5:4] == 2'b11)) GRN = r_COLOR_SEL[3:0];
         else if (w_HAM && (r_COLOR_SEL[5:4] == 2'b11)) RED = r_COLOR_SEL[3:0];
-        else if (w_HAM && (r_COLOR_SEL[5:4] == 2'b11)) BLUE = r_COLOR_SEL[3:0];
-        else { nZD, RED, GREEN, BLUE } = r_COLOR[r_COLOR_SEL][11:0];
+        else if (w_HAM && (r_COLOR_SEL[5:4] == 2'b11)) BLU = r_COLOR_SEL[3:0];
+        else { RED, GRN, BLU } = r_COLOR[r_COLOR_SEL][11:0];
 
         // In OCS, background is just COLOR00
         nZD <= r_COLOR_SEL == 6'b000000;
@@ -277,9 +261,10 @@ module Denise_8373(
         2'b01:  begin
                 // Bit Plane Control Register
                 if(l_RGA == 8'b1_001_001) begin
-                    for(i=0; i<6; i=i+1) begin
+                    generate for(i=0; i<6; i=i+1) begin
                         r_BPLxDAT_latch[i] <= r_BPLxDAT[i];
                     end
+                    endgenerate
                 end
                 // Sprite Position Compare Logic
                 for(i=0; i<8; i=i+1) begin
