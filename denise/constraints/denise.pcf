@@ -1,36 +1,30 @@
-# Configuration Pins
-set_io CBSEL0   L9
-set_io CBSEL1   P10
-set_io CDONE    M10
-set_io CRESET_B L10
-set_io USER0    G4
-set_io USER1    G3 
-
-# PSRAM Pins
-set_io DAT_CLK  C3
-set_io DAT_EN   E4
-set_io DAT0     B1
-set_io DAT1     D1
-set_io DAT2     C1
-set_io DAT3     D3
-
-# SPI FLash Pins
-set_io ICE_CLK  P7
-set_io ICE_MISO H3
-set_io ICE_MOSI K3
-set_io ICE_SCK  K4
-set_io ICE_SS   L1
+# # Configuration Pins
+# set_io CBSEL0   L9
+# set_io CBSEL1   P10
+# set_io CDONE    M10
+# set_io CRESET_B L10
+# set_io USER0    G4
+# set_io USER1    G3 
+# 
+# # PSRAM Pins
+# set_io DAT_CLK  C3
+# set_io DAT_EN   E4
+# set_io DAT0     B1
+# set_io DAT1     D1
+# set_io DAT2     C1
+# set_io DAT3     D3
+# 
+# # SPI FLash Pins
+# set_io ICE_CLK  P7
+# set_io ICE_MISO H3
+# set_io ICE_MOSI K3
+# set_io ICE_SCK  K4
+# set_io ICE_SS   L1
 
 # Denise Pins
-set_io DB[6]    P8  # PIN 1
-set_io DB[5]    M7  # PIN 2
-set_io DB[4]    L8  # PIN 3
-set_io DB[3]    P5  # PIN 4
-set_io DB[2]    M6  # PIN 5
-set_io DB[1]    P4  # PIN 6
-set_io DB[0]    L6  # PIN 7
 set_io M1H      P3  # PIN 8
 set_io M0H      M3  # PIN 9
+
 set_io RGA[8]   P2  # PIN 10
 set_io RGA[7]   M4  # PIN 11
 set_io RGA[6]   L4  # PIN 12
@@ -39,28 +33,37 @@ set_io RGA[4]   A2  # PIN 14
 set_io RGA[3]   A3  # PIN 15
 set_io RGA[2]   C4  # PIN 16
 set_io RGA[1]   A4  # PIN 17
-set_io BURST    C5  # PIN 18
+
+set_io BURST_n  C5  # PIN 18
+
                     # PIN 19 5V
+
 set_io RED[0]   C6  # PIN 20
 set_io RED[1]   A6  # PIN 21
 set_io RED[2]   C7  # PIN 22
 set_io RED[3]   A7  # PIN 23
+
 set_io BLU[0]   C9  # PIN 24
 set_io BLU[1]   A10 # PIN 25 
 set_io BLU[2]   C10 # PIN 26 
 set_io BLU[3]   A11 # PIN 27 
+
 set_io GRN[0]   C11 # PIN 28 
 set_io GRN[1]   A12 # PIN 29 
 set_io GRN[2]   C12 # PIN 30 
 set_io GRN[3]   B14 # PIN 31 
-set_io BLANK    D12 # PIN 32 
-set_io ZD       C14 # PIN 33 
-set_io nCDAC    D14 # PIN 34 
+
+set_io CSYNC_n  D12 # PIN 32 
+set_io ZD_n     C14 # PIN 33 
+set_io CDAC_n   D14 # PIN 34 
 set_io C7M      E12 # PIN 35 
-set_io nCAS     F12 # PIN 36 
+set_io CCK      F12 # PIN 36 
+
                     # PIN 37 GND
+
 set_io M0V      G12 # PIN 38 
 set_io M1V      H11 # PIN 39 
+
 set_io DB[15]   H12 # PIN 40 
 set_io DB[14]   K14 # PIN 41 
 set_io DB[13]   J11 # PIN 42 
@@ -70,3 +73,10 @@ set_io DB[10]   K12 # PIN 45
 set_io DB[9]    G11 # PIN 46 
 set_io DB[8]    M9  # PIN 47
 set_io DB[7]    P9  # PIN 48
+set_io DB[6]    P8  # PIN 1
+set_io DB[5]    M7  # PIN 2
+set_io DB[4]    L8  # PIN 3
+set_io DB[3]    P5  # PIN 4
+set_io DB[2]    M6  # PIN 5
+set_io DB[1]    P4  # PIN 6
+set_io DB[0]    L6  # PIN 7
