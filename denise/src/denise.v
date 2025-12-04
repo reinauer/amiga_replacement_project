@@ -1,30 +1,3 @@
-// Copyright 2011, 2012 Frederic Requin
-//
-// This file is part of the MCC216 project
-//
-// Denise re-implementation is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 3 of the License, or
-// (at your option) any later version.
-//
-// Denise re-implementation is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.    See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.    If not, see <http://www.gnu.org/licenses/>.
-//
-// The Denise core:
-// ----------------
-//    - It can interface with a real Amiga OCS/ECS HW
-//    - It uses the 7 MHz clock (C7M) to generate a 56 MHz master clock
-//    - CDAC_n and CCK phases are based on CCK value at rising edge of C7M
-//    - Data bus (DB) is latched one cycle after address bus (RGA)
-//    - The design does not have a reset input
-//    - The design uses strobe cycles for the vertical blanking and lines lengths
-//    - The design size is only 1120 LEs on a Cyclone III
-
 // Measured values:
 // ----------------
 
@@ -36,32 +9,32 @@
 // PAL interlaced:
 // ---------------
 //     8 x STREQU \
-//    18 x STRVBL    | 312 lines
-// 286 x STRHOR /
+//    18 x STRVBL  | 312 lines
+//   286 x STRHOR /
 //     9 x STREQU \
-//    17 x STRVBL    | 313 lines
-// 287 x STRHOR /
+//    17 x STRVBL  | 313 lines
+//   287 x STRHOR /
 
 // PAL non-interlaced:
 // -------------------
 //     9 x STREQU \
-//    17 x STRVBL    | 313 lines
-// 287 x STRHOR /
+//    17 x STRVBL  | 313 lines
+//   287 x STRHOR /
 
 // NTSC interlaced:
 // ----------------
 //    10 x STREQU \
-//    11 x STRVBL    | 262 lines with 131 x STRLONG
-// 241 x STRHOR /
+//    11 x STRVBL  | 262 lines with 131 x STRLONG
+//   241 x STRHOR /
 //    10 x STREQU \
-//    11 x STRVBL    | 263 lines with 131/132 x STRLONG
-// 242 x STRHOR /
+//    11 x STRVBL  | 263 lines with 131/132 x STRLONG
+//   242 x STRHOR /
 
 // NTSC non-interlaced:
 // --------------------
 //    10 x STREQU \
-//    11 x STRVBL    | 263 lines with with 131/132 x STRLONG
-// 242 x STRHOR /
+//    11 x STRVBL  | 263 lines with with 131/132 x STRLONG
+//   242 x STRHOR /
 
 module Denise(
     // Main clock
