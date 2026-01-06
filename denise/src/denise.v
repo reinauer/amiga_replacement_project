@@ -78,43 +78,30 @@ module Denise
 // Register address decoding //
 ///////////////////////////////
 
-reg  [5:1] r_rga_p1;
-reg        r_rregs_clx_p1;
-reg        r_wregs_str_p1;
-reg        r_rregs_id_p1;
-reg        r_wregs_diwb_p1;
-reg        r_wregs_diwe_p1;
-reg        r_wregs_clx_p1;
-reg        r_wregs_ctl_p1;
-reg        r_wregs_bpl_p1;
-reg        r_wregs_spr_p1;
-reg        r_wregs_clut_p1;
-reg        r_wregs_diwh_p1;
-reg        r_wregs_joy0_p1;
-reg        r_wregs_joy1_p1;
-reg        r_wregs_joyw_p1;
-
+reg  [8:1] r_rga_p1;
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-        r_wregs_joy0_p1 <= (rga[8:1] == 8'b0_0000_101); // JOYxDAT  : $00A
-        r_wregs_joy1_p1 <= (rga[8:1] == 8'b0_0000_110); // JOYxDAT  : $00C
-        r_rregs_clx_p1  <= (rga[8:1] == 8'b0_0000_111); // CLXDAT   : $00E
-        r_wregs_joyw_p1 <= (rga[8:1] == 8'b0_0011_011); // JOYTEST  : $036
-        r_wregs_str_p1  <= (rga[8:1] == 8'b0_0011_1xx); // Strobes  : $038 - $03E
-        r_rregs_id_p1   <= (rga[8:1] == 8'b0_0111_110); // DENISEID : $07C
-        r_wregs_diwb_p1 <= (rga[8:1] == 8'b0_1000_111); // DIWSTRT  : $08E
-        r_wregs_diwe_p1 <= (rga[8:1] == 8'b0_1001_000); // DIWSTOP  : $090
-        r_wregs_clx_p1  <= (rga[8:1] == 8'b0_1001_100); // CLXCON   : $098
-        r_wregs_ctl_p1  <= (rga[8:1] == 8'b1_0000_0xx); // BPLCONx  : $100 - $106
-        r_wregs_bpl_p1  <= (rga[8:1] == 8'b1_0001_xxx); // BPLxDAT  : $110 - $11E
-        r_wregs_spr_p1  <= (rga[8:1] == 8'b1_01xx_xxx); // Sprites  : $140 - $17E
-        r_wregs_clut_p1 <= (rga[8:1] == 8'b1_10xx_xxx); // Color    : $180 - $1BE
-        r_wregs_diwh_p1 <= (rga[8:1] == 8'b1_1110_010); // DIWHIGH  : $1E4
-
-        // Latch RGA bits 5 - 1 for next cycle
-        r_rga_p1 <= rga[5:1];
+        // Latch RGA bits for next cycle
+        r_rga_p1 <= rga;//[5:1];
   end
 end
+
+// Comparators
+wire       w_rregs_joy0_p1 = (r_rga_p1[8:1] == 8'b0_0000_101); // JOYxDAT  : $00A
+wire       w_rregs_joy1_p1 = (r_rga_p1[8:1] == 8'b0_0000_110); // JOYxDAT  : $00C
+wire       w_rregs_clx_p1  = (r_rga_p1[8:1] == 8'b0_0000_111); // CLXDAT   : $00E
+wire       w_rregs_id_p1   = (r_rga_p1[8:1] == 8'b0_0111_110); // DENISEID : $07C
+
+wire       w_wregs_joyw_p1 = (r_rga_p1[8:1] == 8'b0_0011_011); // JOYTEST  : $036
+wire       w_wregs_str_p1  = (r_rga_p1[8:1] == 8'b0_0011_1xx); // Strobes  : $038 - $03E
+wire       w_wregs_diwb_p1 = (r_rga_p1[8:1] == 8'b0_1000_111); // DIWSTRT  : $08E
+wire       w_wregs_diwe_p1 = (r_rga_p1[8:1] == 8'b0_1001_000); // DIWSTOP  : $090
+wire       w_wregs_clx_p1  = (r_rga_p1[8:1] == 8'b0_1001_100); // CLXCON   : $098
+wire       w_wregs_ctl_p1  = (r_rga_p1[8:1] == 8'b1_0000_0xx); // BPLCONx  : $100 - $106
+wire       w_wregs_bpl_p1  = (r_rga_p1[8:1] == 8'b1_0001_xxx); // BPLxDAT  : $110 - $11E
+wire       w_wregs_spr_p1  = (r_rga_p1[8:1] == 8'b1_01xx_xxx); // Sprites  : $140 - $17E
+wire       w_wregs_clut_p1 = (r_rga_p1[8:1] == 8'b1_10xx_xxx); // Color    : $180 - $1BE
+wire       w_wregs_diwh_p1 = (r_rga_p1[8:1] == 8'b1_1110_010); // DIWHIGH  : $1E4
 
 ///////////////////
 // PAL/NTSC flag //
@@ -124,7 +111,7 @@ reg [1:0] r_str_ctr;
 
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-    if (r_wregs_str_p1) begin
+    if (w_wregs_str_p1) begin
       // STRLONG strobes reset the counter
       if (r_rga_p1[2:1] == 2'b11)
         r_str_ctr <= 2'b00;
@@ -144,7 +131,7 @@ reg [3:0] r_equ_ctr;
 
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-    if (r_wregs_str_p1) begin
+    if (w_wregs_str_p1) begin
       // Discard STRLONG strobes
       if (r_rga_p1[2:1] != 2'b11) begin
         // STREQU strobes increment counter
@@ -175,9 +162,9 @@ reg       r_lol_ena;
 // HPOS clear conditions
 assign w_hpos_clr = (((r_rga_p1[2:1] == 2'b00) && (cfg_ecs)) || 
                      (r_rga_p1[2:1] == 2'b01) ||
-                     (r_rga_p1[2:1] == 2'b10)) ? (r_wregs_str_p1 & cck) : 1'b0;
+                     (r_rga_p1[2:1] == 2'b10)) ? (w_wregs_str_p1 & cck) : 1'b0;
 // HPOS disable conditions
-assign w_hpos_dis = (r_rga_p1[2:1] == 2'b11) ? (r_wregs_str_p1 & cck) : 1'b0;
+assign w_hpos_dis = (r_rga_p1[2:1] == 2'b11) ? (w_wregs_str_p1 & cck) : 1'b0;
 
 always@(posedge clk) begin
   if (cck_edge) begin
@@ -215,13 +202,13 @@ reg       r_vwin_ena_p0;
 always@(posedge clk) begin
   if (cck_edge & cck) begin
     // DIWSTRT
-    if (r_wregs_diwb_p1)
+    if (w_wregs_diwb_p1)
       r_HDIWSTRT <= { 1'b0, db_in[7:0] };
     // DIWSTOP
-    if (r_wregs_diwe_p1)
+    if (w_wregs_diwe_p1)
       r_HDIWSTOP <= { 1'b1, db_in[7:0] };
     // DIWHIGH
-    if ((r_wregs_diwh_p1) && (cfg_ecs)) begin
+    if ((w_wregs_diwh_p1) && (cfg_ecs)) begin
       r_HDIWSTRT[8] <= db_in[5];
       r_HDIWSTOP[8] <= db_in[13];
     end
@@ -239,7 +226,7 @@ always@(posedge clk) begin
     // Vertical window
     if (r_hpos == 9'h013)
       r_vwin_ena_p0 <= 1'b0;
-    else if (r_wregs_bpl_p1)
+    else if (w_wregs_bpl_p1)
       r_vwin_ena_p0 <= 1'b1;
     // Delayed horizontal + vertical window
     r_hwin_ena_p1 <= r_hwin_ena_p0 & r_vwin_ena_p0;
@@ -256,7 +243,7 @@ reg  r_vblank_p2;
 always@(posedge clk) begin
   if (cck_edge & cck) begin
     // Vertical blanking only during STREQU and STRVBL
-    if ((r_wregs_str_p1) && (r_rga_p1[2:1] != 2'b11))
+    if ((w_wregs_str_p1) && (r_rga_p1[2:1] != 2'b11))
       r_vblank_p2 <= ~r_rga_p1[2];
   end
 end
@@ -303,7 +290,7 @@ reg  [3:0] r_ddf_dly_p3;
 
 always@(posedge clk) begin
   if (cck_edge) begin
-    if ((r_wregs_bpl_p1) && (cck)) begin
+    if ((w_wregs_bpl_p1) && (cck)) begin
       // Load BPLxDAT register (6 & 7 unused)
       r_BPLxDAT_p2[r_rga_p1[3:1]] <= db_in[15:0];
       // BPL1DAT is written : 
@@ -349,7 +336,7 @@ reg       r_DBLPF;
 // BPLCON0 register
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-    if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b00)) begin
+    if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b00)) begin
       r_HIRES <= db_in[15];
       //r_BPU   <= { db_in[4], db_in[14:12] };
       r_BPU   <= { 1'b0, db_in[14:12] };
@@ -366,7 +353,7 @@ reg [3:0] r_PF2H;
 // BPLCON1 register
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-    if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b01)) begin
+    if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b01)) begin
       r_PF1H <= db_in[3:0];
       r_PF2H <= db_in[7:4];
     end
@@ -456,7 +443,7 @@ reg [2:0] r_PF1P;
 // BPLCON2 register
 always@(posedge clk) begin
   if (cck_edge & cck) begin
-    if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b10)) begin
+    if ((w_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b10)) begin
       r_PF2PRI <= db_in[6];
       r_PF2P   <= db_in[5:3];
       r_PF1P   <= db_in[2:0];
@@ -470,7 +457,7 @@ reg [7:0] r_bpl_ena;
 always@(posedge clk) begin
   if (cck_edge & cck) begin
     // Bitplane enable flags updated during BPL1DAT write
-    if ((r_wregs_bpl_p1) && (r_rga_p1[3:1] == 3'b000)) begin
+    if ((w_wregs_bpl_p1) && (r_rga_p1[3:1] == 3'b000)) begin
       case (r_BPU)
         4'd0    : r_bpl_ena <= 8'b00000000;
         4'd1    : r_bpl_ena <= 8'b00000001;
@@ -563,7 +550,7 @@ reg [15:0] r_SPRDATB [0:7];
 // SPRxPOS,  SPRxCTL, SPRxDATA and SPRxDATB registers
 always@(posedge clk) begin
   if (cck_edge) begin
-    if ((r_wregs_spr_p1) && (cck)) begin
+    if ((w_wregs_spr_p1) && (cck)) begin
       case (r_rga_p1[2:1])
         2'b00 : // SPRxPOS register
         begin
@@ -779,7 +766,7 @@ reg   [5:0] r_MVBP;
 // CLXCON register
 always@(posedge clk) begin
   if ((cck_edge) && (cck)) begin
-    if (r_wregs_clx_p1) begin
+    if (w_wregs_clx_p1) begin
       r_ENSP <= db_in[15:12];
       r_ENBP <= db_in[11:6];
       r_MVBP <= db_in[5:0];
@@ -873,7 +860,7 @@ reg [7:0] r_m1v_data;
 
 always@(posedge clk) begin
     if (cck_edge) begin
-        if (r_wregs_joyw_p1) begin
+        if (w_wregs_joyw_p1) begin
             { r_m0v_data, r_m0h_data } <= db_in;
             { r_m1v_data, r_m1h_data } <= db_in;
         end
@@ -922,18 +909,18 @@ reg [14:0] r_CLXDAT;
 
 always@(posedge clk) begin
   if (cck_edge & ~cck) begin
-         if (r_rregs_clx_p1)           db_out <= r_CLXDAT;
-    else if (r_rregs_id_p1 && cfg_ecs) db_out <= 16'hFFFC;
-    else if (r_wregs_joy0_p1)          db_out <= { r_m0v_data, r_m0h_data };
-    else if (r_wregs_joy1_p1)          db_out <= { r_m1v_data, r_m1h_data };
+         if (w_rregs_clx_p1)           db_out <= r_CLXDAT;
+    else if (w_rregs_id_p1 && cfg_ecs) db_out <= 16'hFFFC;
+    else if (w_rregs_joy0_p1)          db_out <= { r_m0v_data, r_m0h_data };
+    else if (w_rregs_joy1_p1)          db_out <= { r_m1v_data, r_m1h_data };
 
-    db_oen <= r_rregs_clx_p1 
-            | r_wregs_joy0_p1
-            | r_wregs_joy1_p1
-            | (cfg_ecs & r_rregs_id_p1);
+    db_oen <= w_rregs_clx_p1 
+            | w_rregs_joy0_p1
+            | w_rregs_joy1_p1
+            | (cfg_ecs & w_rregs_id_p1);
   end
   if (cck_edge | cckq_edge) begin
-    if (cck_edge & ~cck & r_rregs_clx_p1)
+    if (cck_edge & ~cck & w_rregs_clx_p1)
     // CLXDAT read : clear the register
     r_CLXDAT <= 15'b0000000_00000000;
   else
@@ -951,9 +938,9 @@ wire        w_clut_rd;
 wire [11:0] w_clut_rgb_p7;
 
 // Color look-up table write strobe
-//assign w_cpu_wr = r_wregs_clut_p1 & cck_edge & cck;
+//assign w_cpu_wr = w_wregs_clut_p1 & cck_edge & cck;
 // Half a CDAC_n cycle earlier for the Copper to be in sync.
-assign w_cpu_wr = r_wregs_clut_p1 & cckq_edge & ~cck;
+assign w_cpu_wr = w_wregs_clut_p1 & cckq_edge & ~cck;
 
 // Color look-up table read strobe
 assign w_clut_rd = cck_edge | cckq_edge;
