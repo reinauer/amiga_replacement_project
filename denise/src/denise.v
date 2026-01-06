@@ -9,8 +9,8 @@ module Denise
   input             clk,       // Master clock (28/56/85 MHz)
   // Generated clocks
   input             cck,       // CCK clock
-  input             cdac_r,    // CDAC_n rising edge
-  input             cdac_f,    // CDAC_n falling edge
+  input             cck_edge,    // CDAC_n rising edge
+  input             cckq_edge,    // CDAC_n falling edge
   // Mouse/Joystick
   input             cckq,        // CCK quadrature sample point
   input             m0h,
@@ -95,12 +95,11 @@ reg        r_wregs_joy1_p1;
 reg        r_wregs_joyw_p1;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
         r_wregs_joy0_p1 <= (rga[8:1] == 8'b0_0000_101); // JOYxDAT  : $00A
         r_wregs_joy1_p1 <= (rga[8:1] == 8'b0_0000_110); // JOYxDAT  : $00C
         r_rregs_clx_p1  <= (rga[8:1] == 8'b0_0000_111); // CLXDAT   : $00E
-        r_wregs_joyw_p1 <= (rga[8:1] == 8'b0_0011_011); // $036
+        r_wregs_joyw_p1 <= (rga[8:1] == 8'b0_0011_011); // JOYTEST  : $036
         r_wregs_str_p1  <= (rga[8:1] == 8'b0_0011_1xx); // Strobes  : $038 - $03E
         r_rregs_id_p1   <= (rga[8:1] == 8'b0_0111_110); // DENISEID : $07C
         r_wregs_diwb_p1 <= (rga[8:1] == 8'b0_1000_111); // DIWSTRT  : $08E
@@ -124,8 +123,7 @@ end
 reg [1:0] r_str_ctr;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     if (r_wregs_str_p1) begin
       // STRLONG strobes reset the counter
       if (r_rga_p1[2:1] == 2'b11)
@@ -145,8 +143,7 @@ assign pal_ntsc = &r_str_ctr;
 reg [3:0] r_equ_ctr;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     if (r_wregs_str_p1) begin
       // Discard STRLONG strobes
       if (r_rga_p1[2:1] != 2'b11) begin
@@ -159,7 +156,7 @@ always@(posedge clk) begin
       end
     end
   end
-  if (cdac_r) begin
+  if (cck_edge) begin
     if (sol) begin
       vsync <= |r_equ_ctr;
     end
@@ -183,8 +180,7 @@ assign w_hpos_clr = (((r_rga_p1[2:1] == 2'b00) && (cfg_ecs)) ||
 assign w_hpos_dis = (r_rga_p1[2:1] == 2'b11) ? (r_wregs_str_p1 & cck) : 1'b0;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     if (w_hpos_clr) begin
       // STREQU (ECS only), STRVBL or STRHOR : HPOS starts at 2
       r_hpos    <= 9'd2;
@@ -200,9 +196,9 @@ always@(posedge clk) begin
   end
   // Start of line flag for external scandoubler
   if (r_hpos == 9'd32)
-    if (cdac_f) sol <= 1'b1;
+    if (cckq_edge) sol <= 1'b1;
   else
-    if (cdac_r) sol <= 1'b0;
+    if (cck_edge) sol <= 1'b0;
 end
 
 ///////////////////////////////
@@ -217,8 +213,7 @@ reg       r_hwin_ena_p2;
 reg       r_vwin_ena_p0;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     // DIWSTRT
     if (r_wregs_diwb_p1)
       r_HDIWSTRT <= { 1'b0, db_in[7:0] };
@@ -234,8 +229,7 @@ always@(posedge clk) begin
 end
 
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  if (cdac_f) begin
+  if (cckq_edge) begin
     // Display window horizontal start
     if (r_hpos == r_HDIWSTRT)
       r_hwin_ena_p0 <= 1'b1;
@@ -260,8 +254,7 @@ end
 reg  r_vblank_p2;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     // Vertical blanking only during STREQU and STRVBL
     if ((r_wregs_str_p1) && (r_rga_p1[2:1] != 2'b11))
       r_vblank_p2 <= ~r_rga_p1[2];
@@ -275,12 +268,10 @@ end
 reg  r_hblank_p3;
 
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  //if (cdac_f) begin
+  //if (cckq_edge) begin
   //  r_hblank_p3 <= ~r_hwin_ena_p2;
   //end
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     if (r_hpos == 9'h013)
       r_hblank_p3 <= 1'b1;
     else if (r_hpos == 9'h061)
@@ -296,8 +287,7 @@ reg  r_cblank_p4;
 
 // (BUG!! but implemented this way on real HW)
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  if (cdac_f) begin
+  if (cckq_edge) begin
     r_cblank_p4 <= r_hblank_p3 | r_vblank_p2;
   end
 end
@@ -312,8 +302,7 @@ reg        r_bpl_load_p3;
 reg  [3:0] r_ddf_dly_p3;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     if ((r_wregs_bpl_p1) && (cck)) begin
       // Load BPLxDAT register (6 & 7 unused)
       r_BPLxDAT_p2[r_rga_p1[3:1]] <= db_in[15:0];
@@ -334,8 +323,7 @@ always@(posedge clk) begin
 end
       
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  if (cdac_f) begin
+  if (cckq_edge) begin
     // Load second stage registers
     if (r_bpl_load_p3) begin
       r_BPLxDAT_p3[0] <= r_BPLxDAT_p2[0] & {16{r_bpl_ena[0]}};
@@ -360,8 +348,7 @@ reg       r_DBLPF;
 
 // BPLCON0 register
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b00)) begin
       r_HIRES <= db_in[15];
       //r_BPU   <= { db_in[4], db_in[14:12] };
@@ -378,8 +365,7 @@ reg [3:0] r_PF2H;
 
 // BPLCON1 register
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b01)) begin
       r_PF1H <= db_in[3:0];
       r_PF2H <= db_in[7:4];
@@ -391,8 +377,7 @@ reg [4:0]  r_pf_dly_p3;
 
 // Counter that keeps track of playfield delay
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  if (cdac_f) begin
+  if (cckq_edge) begin
     if (r_bpl_load_p3)
       // Cleared when BPL1DAT is written
       r_pf_dly_p3 <= 5'b10000;
@@ -407,9 +392,8 @@ reg [15:0] r_pf2dat_p4 [0:2];
 
 // Playfields delays and shifters
 always@(posedge clk) begin
-  // Rising/falling edge of CDAC_n
-  if ((cdac_f) || (cdac_r & r_HIRES)) begin
-    if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF1H) && (cdac_f) && (r_pf_dly_p3[4])) begin
+  if ((cckq_edge) || (cck_edge & r_HIRES)) begin
+    if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF1H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #1 delay
       r_pf1dat_p4[0] <= r_BPLxDAT_p3[0];
       r_pf1dat_p4[1] <= r_BPLxDAT_p3[2];
@@ -421,7 +405,7 @@ always@(posedge clk) begin
       r_pf1dat_p4[1] <= { r_pf1dat_p4[1][14:0], 1'b0 };
       r_pf1dat_p4[2] <= { r_pf1dat_p4[2][14:0], 1'b0 };
     end
-    if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF2H) && (cdac_f) && (r_pf_dly_p3[4])) begin
+    if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF2H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #2 delay
       r_pf2dat_p4[0] <= r_BPLxDAT_p3[1];
       r_pf2dat_p4[1] <= r_BPLxDAT_p3[3];
@@ -453,8 +437,7 @@ assign w_pf_data_p4[4] = r_pf1dat_p4[2][15];
 assign w_pf_data_p4[5] = r_pf2dat_p4[2][15];
 
 always@(posedge clk) begin
-  // Rising/falling edge of CDAC_n
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     r_pf_lol0_p4 <= w_pf_data_p4;
     r_pf_lol1_p4 <= r_pf_lol0_p4;
   end
@@ -472,8 +455,7 @@ reg [2:0] r_PF1P;
 
 // BPLCON2 register
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     if ((r_wregs_ctl_p1) && (r_rga_p1[2:1] == 2'b10)) begin
       r_PF2PRI <= db_in[6];
       r_PF2P   <= db_in[5:3];
@@ -486,8 +468,7 @@ reg [7:0] r_bpl_ena;
 
 // Bitplanes enable
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if (cdac_r & cck) begin
+  if (cck_edge & cck) begin
     // Bitplane enable flags updated during BPL1DAT write
     if ((r_wregs_bpl_p1) && (r_rga_p1[3:1] == 3'b000)) begin
       case (r_BPU)
@@ -511,8 +492,7 @@ reg [5:0] r_bpl_clx_p5;
 reg [5:0] r_bpl_clut_p5;
 
 always@(posedge clk) begin
-  // Rising/falling edge of CDAC_n
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     // Masked playfields data
     r_pf_data_p4[0] = w_pf_lol_p4[0] & r_bpl_ena[0] & r_hwin_ena_p2;
     r_pf_data_p4[1] = w_pf_lol_p4[1] & r_bpl_ena[1] & r_hwin_ena_p2;
@@ -582,8 +562,7 @@ reg [15:0] r_SPRDATB [0:7];
 
 // SPRxPOS,  SPRxCTL, SPRxDATA and SPRxDATB registers
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     if ((r_wregs_spr_p1) && (cck)) begin
       case (r_rga_p1[2:1])
         2'b00 : // SPRxPOS register
@@ -622,8 +601,7 @@ reg       r_spr_act_p0 [0:7];
 
 // Horizontal match
 always@(posedge clk) begin
-  // Falling edge of CDAC_n
-  if (cdac_f) begin
+  if (cckq_edge) begin
     for (i = 0; i < 8; i = i + 1) begin
       r_spr_act_p0[i] <= r_match_ctr[i][4];
       if (r_hpos == r_SPRHPOS[i])
@@ -644,8 +622,7 @@ reg [2:0] r_spr_vis_p1;
 
 // Sprites pixels and groups
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     // Sprites pixels values (shift registers outputs)
     for (i = 0; i < 8; i = i + 1) begin
       r_spr_pix_p1[i][0] <= r_SPRDATA[i][15] & r_spr_act_p0[i];
@@ -697,8 +674,7 @@ reg [2:0] r_spr_vis_p5;
 
 // Sprites-sprites priority logic
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     // Sprites indexes
     v_idx_e_p1    = { r_spr_vis_p1[1:0], 1'b0 }; // Even (0, 2, 4 ,6)
     v_idx_o_p1    = { r_spr_vis_p1[1:0], 1'b1 }; // Odd (1, 3, 5, 7)
@@ -747,8 +723,7 @@ reg       r_spr_sel_p6;
 
 // Sprites-playfields priority logic
 always@(posedge clk) begin
-  // Rising/falling edge of CDAC_n
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     // Memorize the last HAM CLUT access
     if (r_bpl_clut_p5[5:4] == 2'b00)
       r_ham_clut_p5 <= r_bpl_clut_p5[3:0];
@@ -803,8 +778,7 @@ reg   [5:0] r_MVBP;
 
 // CLXCON register
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 1
-  if ((cdac_r) && (cck)) begin
+  if ((cck_edge) && (cck)) begin
     if (r_wregs_clx_p1) begin
       r_ENSP <= db_in[15:12];
       r_ENBP <= db_in[11:6];
@@ -819,8 +793,7 @@ reg [3:0] r_spr_clx_p5;
 
 // Sprites collisions groups
 always@(posedge clk) begin
-  // Rising edge of CDAC_n
-  if (cdac_r) begin
+  if (cck_edge) begin
     // Sprites #0 and #1 => collision group #0
     r_spr_clx_p1[0] <= ((r_SPRDATA[0][15] | r_SPRDATB[0][15]) & r_spr_act_p0[0])
                      | ((r_SPRDATA[1][15] | r_SPRDATB[1][15]) & r_spr_act_p0[1] & r_ENSP[0]);
@@ -899,7 +872,7 @@ reg [7:0] r_m1h_data;
 reg [7:0] r_m1v_data;
 
 always@(posedge clk) begin
-    if (cdac_r) begin
+    if (cck_edge) begin
         if (r_wregs_joyw_p1) begin
             { r_m0v_data, r_m0h_data } <= db_in;
             { r_m1v_data, r_m1h_data } <= db_in;
@@ -948,8 +921,7 @@ end
 reg [14:0] r_CLXDAT;
 
 always@(posedge clk) begin
-  // Rising edge of CDAC_n with CCK = 0
-  if (cdac_r & ~cck) begin
+  if (cck_edge & ~cck) begin
          if (r_rregs_clx_p1)           db_out <= r_CLXDAT;
     else if (r_rregs_id_p1 && cfg_ecs) db_out <= 16'hFFFC;
     else if (r_wregs_joy0_p1)          db_out <= { r_m0v_data, r_m0h_data };
@@ -960,8 +932,8 @@ always@(posedge clk) begin
             | r_wregs_joy1_p1
             | (cfg_ecs & r_rregs_id_p1);
   end
-  if (cdac_r | cdac_f) begin
-    if (cdac_r & ~cck & r_rregs_clx_p1)
+  if (cck_edge | cckq_edge) begin
+    if (cck_edge & ~cck & r_rregs_clx_p1)
     // CLXDAT read : clear the register
     r_CLXDAT <= 15'b0000000_00000000;
   else
@@ -979,12 +951,12 @@ wire        w_clut_rd;
 wire [11:0] w_clut_rgb_p7;
 
 // Color look-up table write strobe
-//assign w_cpu_wr = r_wregs_clut_p1 & cdac_r & cck;
+//assign w_cpu_wr = r_wregs_clut_p1 & cck_edge & cck;
 // Half a CDAC_n cycle earlier for the Copper to be in sync.
-assign w_cpu_wr = r_wregs_clut_p1 & cdac_f & ~cck;
+assign w_cpu_wr = r_wregs_clut_p1 & cckq_edge & ~cck;
 
 // Color look-up table read strobe
-assign w_clut_rd = cdac_r | cdac_f;
+assign w_clut_rd = cck_edge | cckq_edge;
 
 color_table U_color_table
 (
@@ -1009,7 +981,7 @@ reg [11:0] r_rgb_p8;
 
 // HAM decoder
 always@(posedge clk) begin
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     if (r_HOMOD) begin
       // Hold and modify mode
       case (r_bpl_clut_p6[5:4])
@@ -1045,7 +1017,7 @@ end
 
 // Final RGB color mixing
 always@(posedge clk) begin
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     if (r_spr_sel_p7)
       // RGB color from sprites
       r_rgb_p8 <= w_clut_rgb_p7;
@@ -1087,8 +1059,7 @@ reg        r_blank_n_p9;
 reg        r_blank_n_p10;
 
 always@(posedge clk) begin
-  // Rising/falling edge of CDAC_n
-  if (cdac_r | cdac_f) begin
+  if (cck_edge | cckq_edge) begin
     if (r_cblank_p4)
       r_rgb_p9    <= 12'h000;
     else

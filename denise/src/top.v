@@ -31,6 +31,13 @@ module top(
 
 //////////////////////////////////////////////////////
 // PLL that generates 56 MHz clock from 7 MHz       //
+//                                                  //
+// Note that the iCE40HX specification states that  //
+// the minimum PLL speed is ~10MHz, the actual      //
+// lower bound is closer to 4.125MHz. The actual    //
+// constraint is that the internal Fvco sits        //
+// between 533 and 1066MHz.                         //
+//                                                  //
 //////////////////////////////////////////////////////
 
 wire clk_56m;
@@ -49,28 +56,25 @@ SB_PLL40_CORE #(
 );
 
 /////////////////////////////////////////////////
-// Re-generated CDAC_n clocks @ 56 MHz         //
+// Re-generated clocks @ 56 MHz                //
 /////////////////////////////////////////////////
-reg       cdac;
-reg [7:0] cck;
+reg [5:0]  cck;
 
-reg r_cdac_rise;
-reg r_cdac_fall;
+reg        r_cck_edge;
+reg        r_cckq_edge;
 
-always @(posedge clk_56m) begin
-    r_cdac_rise <= (!cdac & CDAC_n) ? 1'b1 : 1'b0;
-    r_cdac_fall <= (cdac & !CDAC_n) ? 1'b1 : 1'b0;
-    cdac <= CDAC_n;
-    cck <= { cck[6:0], CCK };
+always @(posedge clk_56m) begin    
+    r_cck_edge  <= (cck[0] != cck[1]);
+    r_cckq_edge <= (cck[4] != cck[5]);
+    cck         <= { cck[4:0], CCK };
 end
 
-wire w_cckq = cck[3];
+wire w_cckq = cck[4];
 wire w_cck  = cck[0];
 
 /////////////////////////////
 // Instantiate Denise chip //
 /////////////////////////////
-wire        w_clk = clk_56m;
 wire  [8:1] w_rga = RGA;
 
 // Data bus
@@ -84,44 +88,48 @@ assign DB = (w_dbo_d_en) ? w_dbo_d : 16'hz;
 wire [3:0] w_red;
 wire [3:0] w_green;
 wire [3:0] w_blue;
-wire       w_sol;
-wire       w_blank_n;
 wire       w_vsync;
-
-wire       w_m1h = M1H;
-wire       w_m0h = M0H;
-wire       w_m0v = M0V;
-wire       w_m1v = M1V;
+wire       w_blank_n;
+wire       w_sol;
 
 Denise Denise_inst(
-    .clk(w_clk),
+    // Clocks
+    .clk(clk_56m),
     .cck(w_cck),
-    .cdac_r(r_cdac_rise),
-    .cdac_f(r_cdac_fall),
     .cckq(w_cckq),
-    .m0h(w_m0h),
-    .m0v(w_m0v),
-    .m1h(w_m1h),
-    .m1v(w_m1v),
+    .cck_edge(r_cck_edge),
+    .cckq_edge(r_cckq_edge),
+
+    // Mouse/Joystick
+    .m0h(M1H),
+    .m0v(M0H),
+    .m1h(M0V),
+    .m1v(M1V),
+
+    // Config
     .cfg_ecs(1'b1),
     .cfg_a1k(1'b0),
+    .pal_ntsc() // ?
+
+    // Bus Input/Output
     .rga(w_rga),
     .db_in(w_dbi),
     .db_out(w_dbo_d),
     .db_oen(w_dbo_d_en),
+
+    // Video Output
     .red(w_red),
     .green(w_green),
     .blue(w_blue),
     .vsync(w_vsync),
     .blank_n(w_blank_n),
     .sol(w_sol),
-    .pal_ntsc()
 );
 
 /////////////////
-// Scandoubler //
+// Amber TBD   //
 /////////////////
-// TBRD
+
 assign RED = w_red;
 assign GRN = w_green;
 assign BLU = w_blue;
