@@ -315,12 +315,12 @@ always@(posedge clk) begin
   if (cckq_edge) begin
     // Load second stage registers
     if (r_bpl_load_p3) begin
-      r_BPLxDAT_p3[0] <= r_BPLxDAT_p2[0] & {16{r_bpl_ena[0]}};
-      r_BPLxDAT_p3[1] <= r_BPLxDAT_p2[1] & {16{r_bpl_ena[1]}};
-      r_BPLxDAT_p3[2] <= r_BPLxDAT_p2[2] & {16{r_bpl_ena[2]}};
-      r_BPLxDAT_p3[3] <= r_BPLxDAT_p2[3] & {16{r_bpl_ena[3]}};
-      r_BPLxDAT_p3[4] <= r_BPLxDAT_p2[4] & {16{r_bpl_ena[4]}};
-      r_BPLxDAT_p3[5] <= r_BPLxDAT_p2[5] & {16{r_bpl_ena[5]}};
+      r_BPLxDAT_p3[0] <= r_BPLxDAT_p2[0];
+      r_BPLxDAT_p3[1] <= r_BPLxDAT_p2[1];
+      r_BPLxDAT_p3[2] <= r_BPLxDAT_p2[2];
+      r_BPLxDAT_p3[3] <= r_BPLxDAT_p2[3];
+      r_BPLxDAT_p3[4] <= r_BPLxDAT_p2[4];
+      r_BPLxDAT_p3[5] <= r_BPLxDAT_p2[5];
     end
   end
 end
@@ -418,12 +418,12 @@ reg  [5:0] r_pf_lol0_p4;
 reg  [5:0] r_pf_lol1_p4;
 wire [5:0] w_pf_lol_p4;
 
-assign w_pf_data_p4[0] = r_pf1dat_p4[0][15];
-assign w_pf_data_p4[1] = r_pf2dat_p4[0][15];
-assign w_pf_data_p4[2] = r_pf1dat_p4[1][15];
-assign w_pf_data_p4[3] = r_pf2dat_p4[1][15];
-assign w_pf_data_p4[4] = r_pf1dat_p4[2][15];
-assign w_pf_data_p4[5] = r_pf2dat_p4[2][15];
+assign w_pf_data_p4[0] = r_pf1dat_p4[0][15] & r_bpl_ena[0];
+assign w_pf_data_p4[1] = r_pf2dat_p4[0][15] & r_bpl_ena[1];
+assign w_pf_data_p4[2] = r_pf1dat_p4[1][15] & r_bpl_ena[2];
+assign w_pf_data_p4[3] = r_pf2dat_p4[1][15] & r_bpl_ena[3];
+assign w_pf_data_p4[4] = r_pf1dat_p4[2][15] & r_bpl_ena[4];
+assign w_pf_data_p4[5] = r_pf2dat_p4[2][15] & r_bpl_ena[5];
 
 always@(posedge clk) begin
   if (cck_edge | cckq_edge) begin
