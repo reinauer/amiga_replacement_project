@@ -109,7 +109,7 @@ Denise Denise_inst(
     // Config
     .cfg_ecs(1'b1),
     .cfg_a1k(1'b0),
-    .pal_ntsc() // ?
+    .pal_ntsc(), // ?
 
     // Bus Input/Output
     .rga(w_rga),
@@ -123,7 +123,7 @@ Denise Denise_inst(
     .blue(w_blue),
     .vsync(w_vsync),
     .blank_n(w_blank_n),
-    .sol(w_sol),
+    .sol(w_sol)
 );
 
 /////////////////
