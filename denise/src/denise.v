@@ -543,11 +543,13 @@ end
 
 integer i;
 
-reg        r_armed   [0:7];
-reg        r_SPRATT  [0:7];
-reg [8:0]  r_SPRHPOS [0:7];
-reg [15:0] r_SPRDATA [0:7];
-reg [15:0] r_SPRDATB [0:7];
+reg        r_armed       [0:7];
+reg        r_SPRATT      [0:7];
+reg [8:0]  r_SPRHPOS     [0:7];
+reg [15:0] r_SPRDATA     [0:7];
+reg [15:0] r_SPRDATB     [0:7];
+reg [15:0] r_spr_shift_A [0:7];
+reg [15:0] r_spr_shift_B [0:7];
 
 // SPRxPOS,  SPRxCTL, SPRxDATA and SPRxDATB registers
 always@(posedge clk) begin
@@ -575,28 +577,22 @@ always@(posedge clk) begin
         end
       endcase
     end
+
     // Sprites shift registers
     for (i = 0; i < 8; i = i + 1) begin
       if (r_spr_act_p0[i]) begin
-        r_SPRDATA[i] <= { r_SPRDATA[i][14:0], r_SPRDATA[i][15] };
-        r_SPRDATB[i] <= { r_SPRDATB[i][14:0], r_SPRDATB[i][15] };
-      end
-    end
+        r_spr_shift_A[i] <= { r_spr_shift_A[i][14:0], 1'b0 };
+        r_spr_shift_B[i] <= { r_spr_shift_B[i][14:0], 1'b0 };
   end
 end
 
-reg [4:0] r_match_ctr  [0:7];
-reg       r_spr_act_p0 [0:7];
-
-// Horizontal match
-always@(posedge clk) begin
-  if (cckq_edge) begin
+  end else if (cckq_edge) begin
+    // Horizontal match, load DAT into shifters
     for (i = 0; i < 8; i = i + 1) begin
-      r_spr_act_p0[i] <= r_match_ctr[i][4];
-      if (r_hpos == r_SPRHPOS[i])
-        r_match_ctr[i] <= { r_armed[i], 4'b0000 };
-      else if (r_match_ctr[i][4])
-        r_match_ctr[i] <= r_match_ctr[i] + 5'd1;
+      if (r_hpos == r_SPRHPOS[i]) begin
+        r_spr_shift_A[i] <= r_SPRDATA[i];
+        r_spr_shift_B[i] <= r_SPRDATB[i];
+      end
     end
   end
 end
@@ -614,21 +610,21 @@ always@(posedge clk) begin
   if (cck_edge) begin
     // Sprites pixels values (shift registers outputs)
     for (i = 0; i < 8; i = i + 1) begin
-      r_spr_pix_p1[i][0] <= r_SPRDATA[i][15] & r_spr_act_p0[i];
-      r_spr_pix_p1[i][1] <= r_SPRDATB[i][15] & r_spr_act_p0[i];
+      r_spr_pix_p1[i][0] <= r_spr_shift_A[i][15];
+      r_spr_pix_p1[i][1] <= r_spr_shift_B[i][15];
     end
     // Sprites #0 and #1 => group #0
-    r_spr_grp_p0[0] = ((r_SPRDATA[0][15] | r_SPRDATB[0][15]) & r_spr_act_p0[0])
-                    | ((r_SPRDATA[1][15] | r_SPRDATB[1][15]) & r_spr_act_p0[1]);
+    r_spr_grp_p0[0] = ((r_spr_shift_A[0][15] | r_spr_shift_B[0][15]))
+                    | ((r_spr_shift_A[1][15] | r_spr_shift_B[1][15]));
     // Sprites #2 and #3 => group #1
-    r_spr_grp_p0[1] = ((r_SPRDATA[2][15] | r_SPRDATB[2][15]) & r_spr_act_p0[2])
-                    | ((r_SPRDATA[3][15] | r_SPRDATB[3][15]) & r_spr_act_p0[3]);
+    r_spr_grp_p0[1] = ((r_spr_shift_A[2][15] | r_spr_shift_B[2][15]))
+                    | ((r_spr_shift_A[3][15] | r_spr_shift_B[3][15]));
     // Sprites #4 and #5 => group #2
-    r_spr_grp_p0[2] = ((r_SPRDATA[4][15] | r_SPRDATB[4][15]) & r_spr_act_p0[4])
-                    | ((r_SPRDATA[5][15] | r_SPRDATB[5][15]) & r_spr_act_p0[5]);
+    r_spr_grp_p0[2] = ((r_spr_shift_A[4][15] | r_spr_shift_B[4][15]))
+                    | ((r_spr_shift_A[5][15] | r_spr_shift_B[5][15]));
     // Sprites #6 and #7 => group #3
-    r_spr_grp_p0[3] = ((r_SPRDATA[6][15] | r_SPRDATB[6][15]) & r_spr_act_p0[6])
-                    | ((r_SPRDATA[7][15] | r_SPRDATB[7][15]) & r_spr_act_p0[7]);
+    r_spr_grp_p0[3] = ((r_spr_shift_A[6][15] | r_spr_shift_B[6][15]))
+                    | ((r_spr_shift_A[7][15] | r_spr_shift_B[7][15]));
     // Visible group number
     case (r_spr_grp_p0)
       4'b0000 : r_spr_vis_p1 <= 3'd7; // No sprite visible
@@ -784,17 +780,17 @@ reg [3:0] r_spr_clx_p5;
 always@(posedge clk) begin
   if (cck_edge) begin
     // Sprites #0 and #1 => collision group #0
-    r_spr_clx_p1[0] <= ((r_SPRDATA[0][15] | r_SPRDATB[0][15]) & r_spr_act_p0[0])
-                     | ((r_SPRDATA[1][15] | r_SPRDATB[1][15]) & r_spr_act_p0[1] & r_ENSP[0]);
+    r_spr_clx_p1[0] <= ((r_spr_shift_A[0][15] | r_spr_shift_B[0][15]))
+                     | ((r_spr_shift_A[1][15] | r_spr_shift_B[1][15]) & r_ENSP[0]);
     // Sprites #2 and #3 => collision group #1
-    r_spr_clx_p1[1] <= ((r_SPRDATA[2][15] | r_SPRDATB[2][15]) & r_spr_act_p0[2])
-                     | ((r_SPRDATA[3][15] | r_SPRDATB[3][15]) & r_spr_act_p0[3] & r_ENSP[1]);
+    r_spr_clx_p1[1] <= ((r_spr_shift_A[2][15] | r_spr_shift_B[2][15]))
+                     | ((r_spr_shift_A[3][15] | r_spr_shift_B[3][15]) & r_ENSP[1]);
     // Sprites #4 and #5 => collision group #2
-    r_spr_clx_p1[2] <= ((r_SPRDATA[4][15] | r_SPRDATB[4][15]) & r_spr_act_p0[4])
-                     | ((r_SPRDATA[5][15] | r_SPRDATB[5][15]) & r_spr_act_p0[5] & r_ENSP[2]);
+    r_spr_clx_p1[2] <= ((r_spr_shift_A[4][15] | r_spr_shift_B[4][15]))
+                     | ((r_spr_shift_A[5][15] | r_spr_shift_B[5][15]) & r_ENSP[2]);
     // Sprites #6 and #7 => collision group #3
-    r_spr_clx_p1[3] <= ((r_SPRDATA[6][15] | r_SPRDATB[6][15]) & r_spr_act_p0[6])
-                     | ((r_SPRDATA[7][15] | r_SPRDATB[7][15]) & r_spr_act_p0[7] & r_ENSP[3]);
+    r_spr_clx_p1[3] <= ((r_spr_shift_A[6][15] | r_spr_shift_B[6][15]))
+                     | ((r_spr_shift_A[7][15] | r_spr_shift_B[7][15]) & r_ENSP[3]);
     // Delay collision group by 2 CDAC_n clock cycles
     r_spr_clx_p3 <= r_spr_clx_p1 & {4{r_hwin_ena_p1}}; // No collision "behind" the border
     r_spr_clx_p5 <= r_spr_clx_p3;
