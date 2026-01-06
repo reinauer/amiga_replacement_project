@@ -9,10 +9,12 @@ module Denise
   input             clk,       // Master clock (28/56/85 MHz)
   // Generated clocks
   input             cck,       // CCK clock
-  input             cck_edge,    // CDAC_n rising edge
-  input             cckq_edge,    // CDAC_n falling edge
+  input             cckq,      // CCK quadrature clock
+  input             cck_edge,  // CCK edge
+  input             cckq_edge, // CCKQ edge
+  input             cdac_edge, // CDAC edge
+
   // Mouse/Joystick
-  input             cckq,        // CCK quadrature sample point
   input             m0h,
   input             m0v,
   input             m1h,
@@ -342,7 +344,7 @@ always@(posedge clk) begin
       r_BPU   <= { 1'b0, db_in[14:12] };
       r_HOMOD <= db_in[11];
       r_DBLPF <= db_in[10];
-      r_SHRES <= db_in[6];
+      r_SHRES <= db_in[6] && cfg_ecs;
     end
   end
 end
@@ -379,7 +381,7 @@ reg [15:0] r_pf2dat_p4 [0:2];
 
 // Playfields delays and shifters
 always@(posedge clk) begin
-  if ((cckq_edge) || (cck_edge & r_HIRES)) begin
+  if ((cckq_edge) || (cck_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES)) begin
     if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF1H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #1 delay
       r_pf1dat_p4[0] <= r_BPLxDAT_p3[0];

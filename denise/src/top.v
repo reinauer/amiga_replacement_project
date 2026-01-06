@@ -58,14 +58,16 @@ SB_PLL40_CORE #(
 /////////////////////////////////////////////////
 // Re-generated clocks @ 56 MHz                //
 /////////////////////////////////////////////////
-reg [5:0]  cck;
+reg [7:0]  cck;
 
 reg        r_cck_edge;
 reg        r_cckq_edge;
+reg        r_cdac_edge;
 
 always @(posedge clk_56m) begin    
     r_cck_edge  <= (cck[0] != cck[1]);
     r_cckq_edge <= (cck[4] != cck[5]);
+    r_cdac_edge <= (cck[2] != cck[3]) || (cck[6] != cck[7]);
     cck         <= { cck[4:0], CCK };
 end
 
@@ -99,6 +101,7 @@ Denise Denise_inst(
     .cckq(w_cckq),
     .cck_edge(r_cck_edge),
     .cckq_edge(r_cckq_edge),
+    .cdac_edge(r_cdac_edge),
 
     // Mouse/Joystick
     .m0h(M1H),
