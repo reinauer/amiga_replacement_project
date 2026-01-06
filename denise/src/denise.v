@@ -23,11 +23,13 @@ module Denise
   // Configuration
   input             cfg_ecs,   // OCS(0) or ECS(1) chipset
   input             cfg_a1k,   // Normal mode(0), A1000 mode(1)
+
   // Busses
   input       [8:1] rga,       // RGA bus
   input      [15:0] db_in,     // Data bus input
   output reg [15:0] db_out,    // Data bus output
   output reg        db_oen,    // Data bus output enable
+
   // Video output
   output      [3:0] red,       // Red component output
   output      [3:0] green,     // Green component output
@@ -136,8 +138,7 @@ always@(posedge clk) begin
       // STREQU (ECS only), STRVBL or STRHOR : HPOS starts at 2
       r_hpos    <= 9'd2;
       r_lol_ena <= 1'b0;
-    end
-    else begin
+    end else begin
       // STRLONG : long line, disable HPOS counting during 1 clock cycle
       if (w_hpos_dis)
         r_lol_ena <= 1'b1;
@@ -267,8 +268,7 @@ always@(posedge clk) begin
         r_ddf_dly_p3[1] <= r_hpos[1];
         r_ddf_dly_p3[0] <= 1'b0;
       end
-    end
-    else
+    end else
       r_bpl_load_p3 <= 1'b0;
   end
 end
@@ -349,8 +349,7 @@ always@(posedge clk) begin
       r_pf1dat_p4[0] <= r_BPLxDAT_p3[0];
       r_pf1dat_p4[1] <= r_BPLxDAT_p3[2];
       r_pf1dat_p4[2] <= r_BPLxDAT_p3[4];
-    end
-    else begin
+    end else begin
       // Playfield #1 shifter
       r_pf1dat_p4[0] <= { r_pf1dat_p4[0][14:0], 1'b0 };
       r_pf1dat_p4[1] <= { r_pf1dat_p4[1][14:0], 1'b0 };
@@ -361,8 +360,7 @@ always@(posedge clk) begin
       r_pf2dat_p4[0] <= r_BPLxDAT_p3[1];
       r_pf2dat_p4[1] <= r_BPLxDAT_p3[3];
       r_pf2dat_p4[2] <= r_BPLxDAT_p3[5];
-    end
-    else begin
+    end else begin
       // Playfield #2 shifter
       r_pf2dat_p4[0] <= { r_pf2dat_p4[0][14:0], 1'b0 };
       r_pf2dat_p4[1] <= { r_pf2dat_p4[1][14:0], 1'b0 };
@@ -457,8 +455,7 @@ always@(posedge clk) begin
       // Dual playfield mode
       r_pf_vld_p5[0] = r_pf_data_p4[0] | r_pf_data_p4[2] | r_pf_data_p4[4];
       r_pf_vld_p5[1] = r_pf_data_p4[1] | r_pf_data_p4[3] | r_pf_data_p4[5];
-    end
-    else begin
+    end else begin
       // Single playfield mode
       r_pf_vld_p5[0] = 1'b0;
       r_pf_vld_p5[1] = |r_pf_data_p4;
@@ -483,8 +480,7 @@ always@(posedge clk) begin
           default : r_bpl_clut_p5 <= { 3'b000, r_pf_data_p4[4], r_pf_data_p4[2], r_pf_data_p4[0] };
         endcase
       end
-    end
-    else begin
+    end else begin
       // Single playfield mode
       if ((r_PF2P[2:1] == 2'b11) && (r_pf_data_p4[4]))
         // OCS/ECS undocumented behaviour
@@ -539,22 +535,20 @@ always@(posedge clk) begin
         end
       endcase
     end
-
-    // Sprites shift registers
-    for (i = 0; i < 8; i = i + 1) begin
-      if (r_spr_act_p0[i]) begin
-        r_spr_shift_A[i] <= { r_spr_shift_A[i][14:0], 1'b0 };
-        r_spr_shift_B[i] <= { r_spr_shift_B[i][14:0], 1'b0 };
   end
 end
 
-  end else if (cckq_edge) begin
-    // Horizontal match, load DAT into shifters
+always@(posedge clk) begin
+  if (cck_edge) begin
+    // Sprites shift registers
     for (i = 0; i < 8; i = i + 1) begin
-      if ((r_hpos == r_SPRHPOS[i]) && r_armed[i]) begin
-        r_spr_shift_A[i] <= r_SPRDATA[i];
-        r_spr_shift_B[i] <= r_SPRDATB[i];
-      end
+        if ((r_hpos == r_SPRHPOS[i]) && r_armed[i]) begin
+            r_spr_shift_A[i] <= r_SPRDATA[i];
+            r_spr_shift_B[i] <= r_SPRDATB[i];
+        end else begin
+            r_spr_shift_A[i] <= { r_spr_shift_A[i][14:0], 1'b0 };
+            r_spr_shift_B[i] <= { r_spr_shift_B[i][14:0], 1'b0 };
+        end
     end
   end
 end
@@ -691,8 +685,7 @@ always@(posedge clk) begin
         r_clut_idx_p6 <= r_bpl_clut_p5;
       // Select playfields
       r_spr_sel_p6 <= 1'b0;
-    end
-    else begin
+    end else begin
       // Sprites in front of playfields
       if (r_spr_vis_p5[2]) begin
         // No sprite visible : show playfields
@@ -790,76 +783,15 @@ assign w_CLXDAT[0]  = w_odd_clx_p5    & w_even_clx_p5;
 // Joystick/Mouse Write //
 //////////////////////////
 
-///////////////////////////////
-// Joystick/Mouse Quadrature //
-///////////////////////////////
-
-//              A    B
-//   CCK        Low  High
-// 1 Left Joy   Up   Left   M0V
-// 2 Left Joy   Down Right  M0H
-// 3 Right Joy  Up   Left   M1V
-// 4 Right Joy  Down Right  M1H
-//              V/H  VQ/HQ
-//
-// For compatibility, the signals should be brought into Denise
-// using a similar method.
-//
-// Counting up           Couting Down
-// V/H VQ/HQ  D1  D0     V/H VQ/HQ  D1  D0
-//  0    0     1   0      0    0     1   0
-//  1    0     1   1      0    1     0   1
-//  1    1     0   0      1    1     0   0
-//  0    1     0   1      1    0     1   1
-//
-
 reg [7:0] r_m0h_data;
 reg [7:0] r_m0v_data;
 reg [7:0] r_m1h_data;
 reg [7:0] r_m1v_data;
 
-always@(posedge clk) begin
-    if (cck_edge) begin
-        if (w_wregs_joyw_p1) begin
-            { r_m0v_data, r_m0h_data } <= db_in;
-            { r_m1v_data, r_m1h_data } <= db_in;
-        end
-
-    end else if (cckq) begin
-        if(cck) r_m0h_data[1] <= ~m0h;         
-        else r_m0h_data[0] <= m0h ^ r_m0h_data[1];
-
-        if((r_m0h_data[1:0] == 2'b11) & m0h) 
-            r_m0h_data[7:2] <= r_m0h_data[7:2] + 1;
-        if((r_m0h_data[1:0] == 2'b00) & ~m0h) 
-            r_m0h_data[7:2] <= r_m0h_data[7:2] - 1;
-
-        if(cck) r_m0v_data[1] <= ~m0v;         
-        else r_m0v_data[0] <= m0v ^ r_m0v_data[1];
-
-        if((r_m0v_data[1:0] == 2'b11) & m0v) 
-            r_m0v_data[7:2] <= r_m0v_data[7:2] + 1;
-        if((r_m0v_data[1:0] == 2'b00) & ~m0v) 
-            r_m0v_data[7:2] <= r_m0v_data[7:2] - 1;
-
-        if(cck) r_m1h_data[1] <= ~m1h;         
-        else r_m1h_data[0] <= m1h ^ r_m1h_data[1];
-
-        if((r_m1h_data[1:0] == 2'b11) & m1h) 
-            r_m1h_data[7:2] <= r_m1h_data[7:2] + 1;
-        if((r_m1h_data[1:0] == 2'b00) & ~m1h) 
-            r_m1h_data[7:2] <= r_m1h_data[7:2] - 1;
-
-        if(cck) r_m1v_data[1] <= ~m1v;         
-        else r_m1v_data[0] <= m1v ^ r_m1v_data[1];
-
-        if((r_m1v_data[1:0] == 2'b11) & m1v) 
-            r_m1v_data[7:2] <= r_m1v_data[7:2] + 1;
-        if((r_m1v_data[1:0] == 2'b00) & ~m1v) 
-            r_m1v_data[7:2] <= r_m1v_data[7:2] - 1;
-
-    end
-end  
+quad m0h_quad(clk, cck, cckq_edge, m0h, r_m0h_data);
+quad m0v_quad(clk, cck, cckq_edge, m0v, r_m0v_data);
+quad m1h_quad(clk, cck, cckq_edge, m1h, r_m1h_data);
+quad m1v_quad(clk, cck, cckq_edge, m1v, r_m1v_data);
 
 ////////////////////
 // Registers read //
@@ -923,35 +855,20 @@ color_table U_color_table
 reg        r_spr_sel_p7;
 reg        r_ehb_sel_p7;
 reg  [2:0] r_ham_sel_p7;
-reg [11:0] r_ham_rgb_p7;
 reg [11:0] r_rgb_p8;
 
-// HAM decoder
+// Mode (HAM/EHB) decoder
 always@(posedge clk) begin
   if (cck_edge | cckq_edge) begin
     if (r_HOMOD) begin
       // Hold and modify mode
       case (r_bpl_clut_p6[5:4])
-        2'b00 : // Select color
-          r_ham_sel_p7[2:0]  <= 3'b000;
-        2'b01 : // Modify blue
-        begin
-          r_ham_rgb_p7[3:0]  <= r_bpl_clut_p6[3:0];
-          r_ham_sel_p7[0]    <= 1'b1;
-        end
-        2'b10 : // Modify red
-        begin
-          r_ham_rgb_p7[11:8] <= r_bpl_clut_p6[3:0];
-          r_ham_sel_p7[2]    <= 1'b1;
-        end
-        2'b11 : // Modify green
-        begin
-          r_ham_rgb_p7[7:4]  <= r_bpl_clut_p6[3:0];
-          r_ham_sel_p7[1]    <= 1'b1;
-        end
+        2'b00 : r_ham_sel_p7[2:0]  <= 3'b000; // Select color
+        2'b01 : r_ham_sel_p7[0]    <= 1'b1;   // Modify blue
+        2'b10 : r_ham_sel_p7[2]    <= 1'b1;   // Modify red
+        2'b11 : r_ham_sel_p7[1]    <= 1'b1;   // Modify green
       endcase
-    end
-    else begin
+    end else begin
       // Normal mode
       r_ham_sel_p7[2:0]  <= 3'b000;
     end
@@ -973,21 +890,23 @@ always@(posedge clk) begin
 
       // Blue component
       if (r_ham_sel_p7[0])
-        r_rgb_p8[3:0] <= r_ham_rgb_p7[3:0]; // HAM
+        r_rgb_p8[3:0] <= r_bpl_clut_p6[3:0]; // HAM
       else if (r_ehb_sel_p7)
         r_rgb_p8[3:0] <= { 1'b0, w_clut_rgb_p7[3:1] }; // EHB
       else
         r_rgb_p8[3:0] <= w_clut_rgb_p7[3:0]; // CLUT
+
       // Green component
       if (r_ham_sel_p7[1])
-        r_rgb_p8[7:4] <= r_ham_rgb_p7[7:4]; // HAM
+        r_rgb_p8[7:4] <= r_bpl_clut_p6[3:0]; // HAM
       else if (r_ehb_sel_p7)
         r_rgb_p8[7:4] <= { 1'b0, w_clut_rgb_p7[7:5] }; // EHB
       else
         r_rgb_p8[7:4] <= w_clut_rgb_p7[7:4]; // CLUT
+
       // Red component
       if (r_ham_sel_p7[2])
-        r_rgb_p8[11:8] <= r_ham_rgb_p7[11:8]; // HAM
+        r_rgb_p8[11:8] <= r_bpl_clut_p6[3:0]; // HAM
       else if (r_ehb_sel_p7)
         r_rgb_p8[11:8] <= { 1'b0, w_clut_rgb_p7[11:9] }; // EHB
       else
@@ -1067,5 +986,53 @@ module color_table
     end
 
     assign clut_rgb = r_q_p1;
+
+endmodule
+
+///////////////////////////////
+// Joystick/Mouse Quadrature //
+///////////////////////////////
+
+//              A    B
+//   CCK        Low  High
+// 1 Left Joy   Up   Left   M0V
+// 2 Left Joy   Down Right  M0H
+// 3 Right Joy  Up   Left   M1V
+// 4 Right Joy  Down Right  M1H
+//              V/H  VQ/HQ
+//
+// For compatibility, the signals should be brought into Denise
+// using a similar method.
+//
+// Counting up           Couting Down
+// V/H VQ/HQ  D1  D0     V/H VQ/HQ  D1  D0
+//  0    0     1   0      0    0     1   0
+//  1    0     1   1      0    1     0   1
+//  1    1     0   0      1    1     0   0
+//  0    1     0   1      1    0     1   1
+//
+
+module quad(
+    input            clk,
+    input            cck,
+    input            cckq_edge,
+    input            quad,
+    output reg [7:0] data
+);
+
+always @(posedge clk)
+  if (cckq_edge) begin
+    if(cck) begin
+        data[1] <= ~quad;
+        if((data[1:0] == 2'b11) & quad) 
+            data[7:2] <= data[7:2] + 1;
+        if((data[1:0] == 2'b00) & ~quad) 
+            data[7:2] <= data[7:2] - 1;
+                
+    end else begin // D0
+        data[0] <= quad ^ data[1];
+
+    end
+  end
 
 endmodule

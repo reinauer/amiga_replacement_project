@@ -104,9 +104,9 @@ Denise Denise_inst(
     .cdac_edge(r_cdac_edge),
 
     // Mouse/Joystick
-    .m0h(M1H),
-    .m0v(M0H),
-    .m1h(M0V),
+    .m0h(M0H),
+    .m0v(M0V),
+    .m1h(M1H),
     .m1v(M1V),
 
     // Config
