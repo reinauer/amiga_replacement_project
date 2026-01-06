@@ -16,11 +16,11 @@ Denise is the display chip of the Amiga. It is known to be stateless and does no
 This is a drop-in replacement for Amiga 1000 and early Amiga 500 and 2000 machines. This supports
 - It can interface with a real Amiga OCS/ECS HW
 - It uses the 7 MHz clock (C7M) to generate a 56 MHz master clock
-- CDAC_n and CCK phases are based on CCK value at rising edge of C7M
+- CDAC, CCK and CCKQ phases are reconstructed from CCK and PLL clock
 - Data bus (DB) is latched one cycle after address bus (RGA)
-- The design does not have a reset input
+- The design does not have (nor needs) a reset input
 - The design uses strobe cycles for the vertical blanking and lines lengths
-- The design size is currently ~1428 LCs on an iCE40 HX
+- The design size is currently ~1130 LCs on an iCE40 HX
 - Supports original chip set modes, including HAM and Enhance Half Bright
 - Quadrature (mouse) decoding of both mouse inputs (MxH/MxV)
 - 32-colour look up table with dual port memory (CLUT)
