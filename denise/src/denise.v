@@ -589,7 +589,7 @@ end
   end else if (cckq_edge) begin
     // Horizontal match, load DAT into shifters
     for (i = 0; i < 8; i = i + 1) begin
-      if (r_hpos == r_SPRHPOS[i]) begin
+      if ((r_hpos == r_SPRHPOS[i]) && r_armed[i]) begin
         r_spr_shift_A[i] <= r_SPRDATA[i];
         r_spr_shift_B[i] <= r_SPRDATB[i];
       end
