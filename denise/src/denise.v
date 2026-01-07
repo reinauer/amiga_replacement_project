@@ -249,7 +249,6 @@ end
 ////////////////////
 
 reg [15:0] r_BPLxDAT_p2 [0:7];
-reg [15:0] r_BPLxDAT_p3 [0:5];
 reg        r_bpl_load_p3;
 reg  [3:0] r_ddf_dly_p3;
 
@@ -263,27 +262,13 @@ always@(posedge clk) begin
         // Trigger loading of second stage registers
         r_bpl_load_p3 <= 1'b1;
         // Non-aligned DDFSTRT delay
-        r_ddf_dly_p3[3] <= r_hpos[3] & ~r_HIRES;
+        r_ddf_dly_p3[3] <= r_hpos[3] & ~(r_HIRES | r_SHRES);
         r_ddf_dly_p3[2] <= r_hpos[2] & ~r_SHRES;
         r_ddf_dly_p3[1] <= r_hpos[1];
         r_ddf_dly_p3[0] <= 1'b0;
       end
     end else
       r_bpl_load_p3 <= 1'b0;
-  end
-end
-      
-always@(posedge clk) begin
-  if (cckq_edge) begin
-    // Load second stage registers
-    if (r_bpl_load_p3) begin
-      r_BPLxDAT_p3[0] <= r_BPLxDAT_p2[0];
-      r_BPLxDAT_p3[1] <= r_BPLxDAT_p2[1];
-      r_BPLxDAT_p3[2] <= r_BPLxDAT_p2[2];
-      r_BPLxDAT_p3[3] <= r_BPLxDAT_p2[3];
-      r_BPLxDAT_p3[4] <= r_BPLxDAT_p2[4];
-      r_BPLxDAT_p3[5] <= r_BPLxDAT_p2[5];
-    end
   end
 end
 
@@ -346,9 +331,9 @@ always@(posedge clk) begin
   if ((cckq_edge) || (cck_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES)) begin
     if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF1H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #1 delay
-      r_pf1dat_p4[0] <= r_BPLxDAT_p3[0];
-      r_pf1dat_p4[1] <= r_BPLxDAT_p3[2];
-      r_pf1dat_p4[2] <= r_BPLxDAT_p3[4];
+      r_pf1dat_p4[0] <= r_BPLxDAT_p2[0];
+      r_pf1dat_p4[1] <= r_BPLxDAT_p2[2];
+      r_pf1dat_p4[2] <= r_BPLxDAT_p2[4];
     end else begin
       // Playfield #1 shifter
       r_pf1dat_p4[0] <= { r_pf1dat_p4[0][14:0], 1'b0 };
@@ -357,9 +342,9 @@ always@(posedge clk) begin
     end
     if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF2H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #2 delay
-      r_pf2dat_p4[0] <= r_BPLxDAT_p3[1];
-      r_pf2dat_p4[1] <= r_BPLxDAT_p3[3];
-      r_pf2dat_p4[2] <= r_BPLxDAT_p3[5];
+      r_pf2dat_p4[0] <= r_BPLxDAT_p2[1];
+      r_pf2dat_p4[1] <= r_BPLxDAT_p2[3];
+      r_pf2dat_p4[2] <= r_BPLxDAT_p2[5];
     end else begin
       // Playfield #2 shifter
       r_pf2dat_p4[0] <= { r_pf2dat_p4[0][14:0], 1'b0 };
@@ -441,7 +426,7 @@ reg [5:0] r_bpl_clx_p5;
 reg [5:0] r_bpl_clut_p5;
 
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge) begin
+  if (cck_edge | cckq_edge | cdac_edge) begin
     // Masked playfields data
     r_pf_data_p4[0] = w_pf_lol_p4[0] & r_bpl_ena[0] & r_hwin_ena_p2;
     r_pf_data_p4[1] = w_pf_lol_p4[1] & r_bpl_ena[1] & r_hwin_ena_p2;
@@ -664,7 +649,7 @@ reg       r_spr_sel_p6;
 
 // Sprites-playfields priority logic
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge) begin
+  if (cck_edge | cckq_edge | cdac_edge) begin
     // Memorize the last HAM CLUT access
     if (r_bpl_clut_p5[5:4] == 2'b00)
       r_ham_clut_p5 <= r_bpl_clut_p5[3:0];
@@ -835,7 +820,7 @@ wire [11:0] w_clut_rgb_p7;
 assign w_cpu_wr = w_wregs_clut_p1 & cckq_edge & ~cck;
 
 // Color look-up table read strobe
-assign w_clut_rd = cck_edge | cckq_edge;
+assign w_clut_rd = cck_edge | cckq_edge | cdac_edge;
 
 color_table U_color_table
 (
@@ -859,7 +844,6 @@ reg [11:0] r_rgb_p8;
 
 // Mode (HAM/EHB) decoder
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge) begin
     if (r_HOMOD) begin
       // Hold and modify mode
       case (r_bpl_clut_p6[5:4])
@@ -876,12 +860,10 @@ always@(posedge clk) begin
     r_ehb_sel_p7 <= r_clut_idx_p6[5] & ~r_spr_sel_p6 & ~cfg_a1k;
     // Playfields/sprites select
     r_spr_sel_p7 <= r_spr_sel_p6;
-  end
 end
 
 // Final RGB color mixing
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge) begin
     if (r_spr_sel_p7)
       // RGB color from sprites
       r_rgb_p8 <= w_clut_rgb_p7;
@@ -912,7 +894,6 @@ always@(posedge clk) begin
       else
         r_rgb_p8[11:8] <= w_clut_rgb_p7[11:8]; // CLUT
     end
-  end
 end
 
 ////////////////////////////
@@ -925,7 +906,6 @@ reg        r_blank_n_p9;
 reg        r_blank_n_p10;
 
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge) begin
     if (r_cblank_p4)
       r_rgb_p9    <= 12'h000;
     else
@@ -934,7 +914,6 @@ always@(posedge clk) begin
     // Final output register
     r_rgb_p10     <= r_rgb_p9;
     r_blank_n_p10 <= r_blank_n_p9;
-  end
 end
 
 // RGB output
