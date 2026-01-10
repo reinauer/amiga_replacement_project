@@ -521,6 +521,11 @@ always@(posedge clk) begin
       // - pixel in bitplane 5 = zero: planes 1-4 work normally (any color from 0-15 is possible)
       // - pixel in bitplane 5 = one: planes 1-4 are disabled, only pixel from plane 5 is shown (color 16 is visible)
       if ((r_PF2P[2:1] == 2'b11) && (r_BPU == 4'd5) && (r_pf_data_p4[4]))
+      // OCS/ECS undocumented behaviour
+      // PF2P > 5 (BPLCON2) and BITPLANES == 5 and NOT AGA
+      // - pixel in bitplane 5 = zero: planes 1-4 work normally (any color from 0-15 is possible)
+      // - pixel in bitplane 5 = one: planes 1-4 are disabled, only pixel from plane 5 is shown (color 16 is visible)
+      if ((r_PF2P[2:1] == 2'b11) && (r_BPU == 4'd5) && (r_pf_data_p4[4]))
         r_bpl_clut_p5 <= 6'b010000;
       else
         // Normal behaviour
