@@ -27,8 +27,8 @@ module Denise
   // Busses
   input       [8:1] rga,       // RGA bus
   input      [15:0] db_in,     // Data bus input
-  output reg [15:0] db_out,    // Data bus output
-  output reg        db_oen,    // Data bus output enable
+  output     [15:0] db_out,    // Data bus output
+  output            db_oen,    // Data bus output enable
 
   // Video output
   output      [3:0] red,       // Red component output
@@ -68,6 +68,53 @@ wire       w_wregs_bpl_p1  = (r_rga_p1[8:1] == 8'b1_0001_xxx); // BPLxDAT  : $11
 wire       w_wregs_spr_p1  = (r_rga_p1[8:1] == 8'b1_01xx_xxx); // Sprites  : $140 - $17E
 wire       w_wregs_clut_p1 = (r_rga_p1[8:1] == 8'b1_10xx_xxx); // Color    : $180 - $1BE
 wire       w_wregs_diwh_p1 = (r_rga_p1[8:1] == 8'b1_1110_010); // DIWHIGH  : $1E4
+
+wire [15:0] jm_db_out;
+wire [15:0] clx_db_out;
+wire w_denise_id = w_rregs_id_p1 && cfg_ecs;
+
+assign db_out = jm_db_out | clx_db_out | (w_denise_id ? 16'hFFFC : 16'd0);
+assign db_oen = w_rregs_clx_p1 | w_rregs_joy0_p1 | w_rregs_joy1_p1 | w_denise_id;
+
+// Implement Joystick & Mouse decoder
+JoyMouse joymouse(
+  .clk(clk),
+  .cck(cck),
+  .cck_edge(cck_edge),
+  .m0h(m0h),
+  .m0v(m0v),
+  .m1h(m1h),
+  .m1v(m1v),
+  .w_rregs_joy0_p1(w_rregs_joy0_p1),
+  .w_rregs_joy1_p1(w_rregs_joy1_p1),
+  .w_wregs_joyw_p1(w_wregs_joyw_p1),
+  .db_in(db_in),
+  .db_out(jm_db_out)
+);
+
+wire [5:0] bpl_data = w_pf_data_p4;
+// wire [1:0] spr_data [0:7];
+// reg [1:0] r_spr_pix_p1 [0:7];
+
+// Pack sprite data
+// wire [15:0] spr_data_flat = {
+//   spr_data[7],spr_data[6],spr_data[5],spr_data[4],
+//   spr_data[3],spr_data[2],spr_data[1],spr_data[0] };
+wire [15:0] spr_data_flat = {
+  r_spr_pix_p1[7],r_spr_pix_p1[6],r_spr_pix_p1[5],r_spr_pix_p1[4],
+  r_spr_pix_p1[3],r_spr_pix_p1[2],r_spr_pix_p1[1],r_spr_pix_p1[0] };
+
+// Implement Collision
+Collision collision(
+  .clk(clk),
+  .cck_pos_edge(cck_edge && cck),
+  .w_wregs_clx_p1(w_wregs_clx_p1),
+  .w_rregs_clx_p1(w_rregs_clx_p1),
+  .db_in(db_in),
+  .db_out(clx_db_out),
+  .bpl_data(bpl_data),
+  .spr_data_flat(spr_data_flat)
+);
 
 ///////////////////
 // PAL/NTSC flag //
@@ -326,9 +373,11 @@ end
 reg [15:0] r_pf1dat_p4 [0:2];
 reg [15:0] r_pf2dat_p4 [0:2];
 
+wire w_pixel_clk = (cckq_edge) || (cck_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES);
+
 // Playfields delays and shifters
 always@(posedge clk) begin
-  if ((cckq_edge) || (cck_edge && (r_HIRES || r_SHRES)) || (cdac_edge && r_SHRES)) begin
+  if (w_pixel_clk) begin
     if (((r_pf_dly_p3[3:0] ^ r_ddf_dly_p3) == r_PF1H) && (cckq_edge) && (r_pf_dly_p3[4])) begin
       // Playfield #1 delay
       r_pf1dat_p4[0] <= r_BPLxDAT_p2[0];
@@ -467,8 +516,11 @@ always@(posedge clk) begin
       end
     end else begin
       // Single playfield mode
-      if ((r_PF2P[2:1] == 2'b11) && (r_pf_data_p4[4]))
-        // OCS/ECS undocumented behaviour
+      // OCS/ECS undocumented behaviour
+      // PF2P > 5 (BPLCON2) and BITPLANES == 5 and NOT AGA
+      // - pixel in bitplane 5 = zero: planes 1-4 work normally (any color from 0-15 is possible)
+      // - pixel in bitplane 5 = one: planes 1-4 are disabled, only pixel from plane 5 is shown (color 16 is visible)
+      if ((r_PF2P[2:1] == 2'b11) && (r_BPU == 4'd5) && (r_pf_data_p4[4]))
         r_bpl_clut_p5 <= 6'b010000;
       else
         // Normal behaviour
@@ -649,37 +701,20 @@ reg       r_spr_sel_p6;
 
 // Sprites-playfields priority logic
 always@(posedge clk) begin
-  if (cck_edge | cckq_edge | cdac_edge) begin
-    // Memorize the last HAM CLUT access
-    if (r_bpl_clut_p5[5:4] == 2'b00)
-      r_ham_clut_p5 <= r_bpl_clut_p5[3:0];
-    
-    // Bitplane CLUT index for HAM mode decoder
-    r_bpl_clut_p6 <= r_bpl_clut_p5;
-    
+  if (cck_edge | cckq_edge) begin    
     // Sprites/playfields test
     if (((r_spr_vis_p5[0]) && (r_pf_vld_p5[0])) || // Playfield #1 test
         ((r_spr_vis_p5[1]) && (r_pf_vld_p5[1])))   // Playfield #2 test
     begin
       // Playfields in front of sprites
-      if ((r_HOMOD) && (r_bpl_clut_p5[5:4] != 2'b00))
-        // HAM mode
-        r_clut_idx_p6 <= { 2'b00, r_ham_clut_p5 };
-      else
-        // Normal mode
-        r_clut_idx_p6 <= r_bpl_clut_p5;
+      r_clut_idx_p6 <= r_HOMOD ? { 2'b0, r_bpl_clut_p5[3:0] }: r_bpl_clut_p5;
       // Select playfields
       r_spr_sel_p6 <= 1'b0;
     end else begin
       // Sprites in front of playfields
       if (r_spr_vis_p5[2]) begin
         // No sprite visible : show playfields
-        if ((r_HOMOD) && (r_bpl_clut_p5[5:4] != 2'b00))
-          // HAM mode
-          r_clut_idx_p6 <= { 2'b00, r_ham_clut_p5 };
-        else
-          // Normal mode
-          r_clut_idx_p6 <= r_bpl_clut_p5;
+        r_clut_idx_p6 <= r_HOMOD ? { 2'b0, r_bpl_clut_p5[3:0] }: r_bpl_clut_p5;
         // Select playfields
         r_spr_sel_p6 <= 1'b0;
       end
@@ -691,119 +726,6 @@ always@(posedge clk) begin
       end
     end
   end
-end
-
-//////////////////////////////////
-// Sprites/bitplanes collisions //
-//////////////////////////////////
-
-reg   [3:0] r_ENSP;
-reg   [5:0] r_ENBP;
-reg   [5:0] r_MVBP;
-
-// CLXCON register
-always@(posedge clk) begin
-  if ((cck_edge) && (cck)) begin
-    if (w_wregs_clx_p1) begin
-      r_ENSP <= db_in[15:12];
-      r_ENBP <= db_in[11:6];
-      r_MVBP <= db_in[5:0];
-    end
-  end
-end
-
-reg [3:0] r_spr_clx_p1;
-reg [3:0] r_spr_clx_p3;
-reg [3:0] r_spr_clx_p5;
-
-// Sprites collisions groups
-always@(posedge clk) begin
-  if (cck_edge) begin
-    // Sprites #0 and #1 => collision group #0
-    r_spr_clx_p1[0] <= ((r_spr_shift_A[0][15] | r_spr_shift_B[0][15]))
-                     | ((r_spr_shift_A[1][15] | r_spr_shift_B[1][15]) & r_ENSP[0]);
-    // Sprites #2 and #3 => collision group #1
-    r_spr_clx_p1[1] <= ((r_spr_shift_A[2][15] | r_spr_shift_B[2][15]))
-                     | ((r_spr_shift_A[3][15] | r_spr_shift_B[3][15]) & r_ENSP[1]);
-    // Sprites #4 and #5 => collision group #2
-    r_spr_clx_p1[2] <= ((r_spr_shift_A[4][15] | r_spr_shift_B[4][15]))
-                     | ((r_spr_shift_A[5][15] | r_spr_shift_B[5][15]) & r_ENSP[2]);
-    // Sprites #6 and #7 => collision group #3
-    r_spr_clx_p1[3] <= ((r_spr_shift_A[6][15] | r_spr_shift_B[6][15]))
-                     | ((r_spr_shift_A[7][15] | r_spr_shift_B[7][15]) & r_ENSP[3]);
-    // Delay collision group by 2 CDAC_n clock cycles
-    r_spr_clx_p3 <= r_spr_clx_p1 & {4{r_hwin_ena_p1}}; // No collision "behind" the border
-    r_spr_clx_p5 <= r_spr_clx_p3;
-  end
-end
-
-wire        w_odd_clx_p5;
-wire        w_even_clx_p5;
-wire [14:0] w_CLXDAT;
-
-// Odd and even bitplanes match
-assign w_odd_clx_p5  = r_bpl_clx_p5[0] | r_bpl_clx_p5[2] | r_bpl_clx_p5[4];
-assign w_even_clx_p5 = r_bpl_clx_p5[1] | r_bpl_clx_p5[3] | r_bpl_clx_p5[5];
-
-// Sprites-sprites collisions
-assign w_CLXDAT[14] = r_spr_clx_p5[2] & r_spr_clx_p5[3]; // Sprites #4 and #6
-assign w_CLXDAT[13] = r_spr_clx_p5[1] & r_spr_clx_p5[3]; // Sprites #2 and #6
-assign w_CLXDAT[12] = r_spr_clx_p5[1] & r_spr_clx_p5[2]; // Sprites #2 and #4
-assign w_CLXDAT[11] = r_spr_clx_p5[0] & r_spr_clx_p5[3]; // Sprites #0 and #6
-assign w_CLXDAT[10] = r_spr_clx_p5[0] & r_spr_clx_p5[2]; // Sprites #0 and #4
-assign w_CLXDAT[9]  = r_spr_clx_p5[0] & r_spr_clx_p5[1]; // Sprites #0 and #2
-// Sprites-bitplanes collisions
-assign w_CLXDAT[8]  = w_even_clx_p5   & r_spr_clx_p5[3]; // Even and Sprite #6
-assign w_CLXDAT[7]  = w_even_clx_p5   & r_spr_clx_p5[2]; // Even and Sprite #4
-assign w_CLXDAT[6]  = w_even_clx_p5   & r_spr_clx_p5[1]; // Even and Sprite #2
-assign w_CLXDAT[5]  = w_even_clx_p5   & r_spr_clx_p5[0]; // Even and Sprite #0
-assign w_CLXDAT[4]  = w_odd_clx_p5    & r_spr_clx_p5[3]; // Odd and Sprite #6
-assign w_CLXDAT[3]  = w_odd_clx_p5    & r_spr_clx_p5[2]; // Odd and Sprite #4
-assign w_CLXDAT[2]  = w_odd_clx_p5    & r_spr_clx_p5[1]; // Odd and Sprite #2
-assign w_CLXDAT[1]  = w_odd_clx_p5    & r_spr_clx_p5[0]; // Odd and Sprite #0
-// Bitplanes-bitplanes collisions
-assign w_CLXDAT[0]  = w_odd_clx_p5    & w_even_clx_p5;
-
-//////////////////////////
-// Joystick/Mouse Write //
-//////////////////////////
-
-reg [7:0] r_m0h_data;
-reg [7:0] r_m0v_data;
-reg [7:0] r_m1h_data;
-reg [7:0] r_m1v_data;
-
-quad m0h_quad(clk, cck, cckq_edge, m0h, r_m0h_data);
-quad m0v_quad(clk, cck, cckq_edge, m0v, r_m0v_data);
-quad m1h_quad(clk, cck, cckq_edge, m1h, r_m1h_data);
-quad m1v_quad(clk, cck, cckq_edge, m1v, r_m1v_data);
-
-////////////////////
-// Registers read //
-////////////////////
-
-reg [14:0] r_CLXDAT;
-
-always@(posedge clk) begin
-  if (cck_edge & ~cck) begin
-         if (w_rregs_clx_p1)           db_out <= r_CLXDAT;
-    else if (w_rregs_id_p1 && cfg_ecs) db_out <= 16'hFFFC;
-    else if (w_rregs_joy0_p1)          db_out <= { r_m0v_data, r_m0h_data };
-    else if (w_rregs_joy1_p1)          db_out <= { r_m1v_data, r_m1h_data };
-
-    db_oen <= w_rregs_clx_p1 
-            | w_rregs_joy0_p1
-            | w_rregs_joy1_p1
-            | (cfg_ecs & w_rregs_id_p1);
-  end
-  if (cck_edge | cckq_edge) begin
-    if (cck_edge & ~cck & w_rregs_clx_p1)
-    // CLXDAT read : clear the register
-    r_CLXDAT <= 15'b0000000_00000000;
-  else
-    // Otherwise, track collisions
-    r_CLXDAT <= r_CLXDAT | w_CLXDAT;
-end
 end
 
 ///////////////////////////////////////
@@ -822,79 +744,17 @@ assign w_cpu_wr = w_wregs_clut_p1 & cckq_edge & ~cck;
 // Color look-up table read strobe
 assign w_clut_rd = cck_edge | cckq_edge | cdac_edge;
 
-color_table U_color_table
+ColourTable U_color_table
 (
   .clk(clk),
   .cpu_wr(w_cpu_wr),
   .cpu_idx(r_rga_p1[5:1]),
   .cpu_rgb(db_in[11:0]),
+
   .clut_rd(w_clut_rd),
   .clut_idx(r_clut_idx_p6[4:0]),
   .clut_rgb(w_clut_rgb_p7)
-);
-
-//////////////////////////////////
-// HAM and EHB modes management //
-//////////////////////////////////
-
-reg        r_spr_sel_p7;
-reg        r_ehb_sel_p7;
-reg  [2:0] r_ham_sel_p7;
-reg [11:0] r_rgb_p8;
-
-// Mode (HAM/EHB) decoder
-always@(posedge clk) begin
-    if (r_HOMOD) begin
-      // Hold and modify mode
-      case (r_bpl_clut_p6[5:4])
-        2'b00 : r_ham_sel_p7[2:0]  <= 3'b000; // Select color
-        2'b01 : r_ham_sel_p7[0]    <= 1'b1;   // Modify blue
-        2'b10 : r_ham_sel_p7[2]    <= 1'b1;   // Modify red
-        2'b11 : r_ham_sel_p7[1]    <= 1'b1;   // Modify green
-      endcase
-    end else begin
-      // Normal mode
-      r_ham_sel_p7[2:0]  <= 3'b000;
-    end
-    // Extra-half-brite
-    r_ehb_sel_p7 <= r_clut_idx_p6[5] & ~r_spr_sel_p6 & ~cfg_a1k;
-    // Playfields/sprites select
-    r_spr_sel_p7 <= r_spr_sel_p6;
-end
-
-// Final RGB color mixing
-always@(posedge clk) begin
-    if (r_spr_sel_p7)
-      // RGB color from sprites
-      r_rgb_p8 <= w_clut_rgb_p7;
-    else begin
-      // RGB color from playfields
-
-      // Blue component
-      if (r_ham_sel_p7[0])
-        r_rgb_p8[3:0] <= r_bpl_clut_p6[3:0]; // HAM
-      else if (r_ehb_sel_p7)
-        r_rgb_p8[3:0] <= { 1'b0, w_clut_rgb_p7[3:1] }; // EHB
-      else
-        r_rgb_p8[3:0] <= w_clut_rgb_p7[3:0]; // CLUT
-
-      // Green component
-      if (r_ham_sel_p7[1])
-        r_rgb_p8[7:4] <= r_bpl_clut_p6[3:0]; // HAM
-      else if (r_ehb_sel_p7)
-        r_rgb_p8[7:4] <= { 1'b0, w_clut_rgb_p7[7:5] }; // EHB
-      else
-        r_rgb_p8[7:4] <= w_clut_rgb_p7[7:4]; // CLUT
-
-      // Red component
-      if (r_ham_sel_p7[2])
-        r_rgb_p8[11:8] <= r_bpl_clut_p6[3:0]; // HAM
-      else if (r_ehb_sel_p7)
-        r_rgb_p8[11:8] <= { 1'b0, w_clut_rgb_p7[11:9] }; // EHB
-      else
-        r_rgb_p8[11:8] <= w_clut_rgb_p7[11:8]; // CLUT
-    end
-end
+); 
 
 ////////////////////////////
 // Mask RGB with blanking //
@@ -906,14 +766,47 @@ reg        r_blank_n_p9;
 reg        r_blank_n_p10;
 
 always@(posedge clk) begin
-    if (r_cblank_p4)
-      r_rgb_p9    <= 12'h000;
-    else
-      r_rgb_p9    <= r_rgb_p8;
+  if (w_pixel_clk) begin
+
+    if (r_cblank_p4) begin
+        r_rgb_p9 <= 12'h000;
+
+    // end else if (r_spr_sel_p6) begin
+    //     r_rgb_p10 <= w_clut_rgb_p7;
+
+    end else if (r_HOMOD) begin
+        // Hold and modify mode
+        case (r_bpl_clut_p5[5:4])
+            2'b00 : r_rgb_p9       <= w_clut_rgb_p7;      // Select color
+            2'b01 : r_rgb_p9[3:0]  <= r_bpl_clut_p5[3:0]; // Modify blue
+            2'b10 : r_rgb_p9[11:8] <= r_bpl_clut_p5[3:0]; // Modify red
+            2'b11 : r_rgb_p9[7:4]  <= r_bpl_clut_p5[3:0]; // Modify green
+        endcase
+        // r_rgb_p10 <= r_rgb_p9;
+
+    end else if (r_clut_idx_p6[5]) begin
+        // Extra-half-brite
+        r_rgb_p9 <= {
+            1'b0, w_clut_rgb_p7[11:9], 
+            1'b0, w_clut_rgb_p7[7:5], 
+            1'b0, w_clut_rgb_p7[3:1] };
+
+    end else begin
+        // Regular colour
+        r_rgb_p9 <= w_clut_rgb_p7;
+    end
+
+    if (r_spr_sel_p6) begin
+      r_rgb_p10 <= w_clut_rgb_p7;
+
+    end else begin
+      r_rgb_p10 <= r_rgb_p9;
+
+    end
+
     r_blank_n_p9  <= ~r_cblank_p4;
-    // Final output register
-    r_rgb_p10     <= r_rgb_p9;
     r_blank_n_p10 <= r_blank_n_p9;
+  end
 end
 
 // RGB output
@@ -921,97 +814,5 @@ assign red     = r_rgb_p10[11:8];
 assign green   = r_rgb_p10[7:4];
 assign blue    = r_rgb_p10[3:0];
 assign blank_n = r_blank_n_p10;
-
-endmodule
-
-////////////////////////
-// Color lookup table //
-////////////////////////
-
-// CLUT Latency is :
-// -----------------
-// 28 MHz : 1 cycle
-// CDAC_n : 0.5 cycles
-
-module color_table
-(
-  input         clk,
-  input         cpu_wr,
-  input   [4:0] cpu_idx,
-  input  [11:0] cpu_rgb,
-  input         clut_rd,
-  input   [4:0] clut_idx,
-  output [11:0] clut_rgb
-);
-
-    // Infered block RAM
-    reg  [11:0] r_mem_clut [0:31];
-
-    // Write port
-    always@(posedge clk) begin
-        if (cpu_wr) begin
-            r_mem_clut[cpu_idx] <= cpu_rgb;
-        end
-    end
-
-    reg  [11:0] r_q_p0;
-    reg  [11:0] r_q_p1;
-
-    // Read port
-    always@(posedge clk) begin
-        if (clut_rd)
-            r_q_p0 <= r_mem_clut[clut_idx];
-        r_q_p1 <= r_q_p0;
-    end
-
-    assign clut_rgb = r_q_p1;
-
-endmodule
-
-///////////////////////////////
-// Joystick/Mouse Quadrature //
-///////////////////////////////
-
-//              A    B
-//   CCK        Low  High
-// 1 Left Joy   Up   Left   M0V
-// 2 Left Joy   Down Right  M0H
-// 3 Right Joy  Up   Left   M1V
-// 4 Right Joy  Down Right  M1H
-//              V/H  VQ/HQ
-//
-// For compatibility, the signals should be brought into Denise
-// using a similar method.
-//
-// Counting up           Couting Down
-// V/H VQ/HQ  D1  D0     V/H VQ/HQ  D1  D0
-//  0    0     1   0      0    0     1   0
-//  1    0     1   1      0    1     0   1
-//  1    1     0   0      1    1     0   0
-//  0    1     0   1      1    0     1   1
-//
-
-module quad(
-    input            clk,
-    input            cck,
-    input            cckq_edge,
-    input            quad,
-    output reg [7:0] data
-);
-
-always @(posedge clk)
-  if (cckq_edge) begin
-    if(cck) begin
-        data[1] <= ~quad;
-        if((data[1:0] == 2'b11) & quad) 
-            data[7:2] <= data[7:2] + 1;
-        if((data[1:0] == 2'b00) & ~quad) 
-            data[7:2] <= data[7:2] - 1;
-                
-    end else begin // D0
-        data[0] <= quad ^ data[1];
-
-    end
-  end
 
 endmodule

@@ -94,7 +94,7 @@ wire       w_vsync;
 wire       w_blank_n;
 wire       w_sol;
 
-Denise Denise_inst(
+Denise denise(
     // Clocks
     .clk(clk_56m),
     .cck(w_cck),
