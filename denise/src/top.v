@@ -1,6 +1,6 @@
 // Copyright 2011, 2012 Frederic Requin
 // Copyright 2024, 2025 Renee Cousins, The Buffee project, Inc
-//  
+//
 // See README.md for details
 
 module top(
@@ -47,7 +47,7 @@ SB_PLL40_CORE #(
     .DIVR(4'b0000),       // reference divider
     .DIVF(7'b1111111),    // feedback multiplier = 1 + 31 = 32
     .DIVQ(3'b100),        // output divider = 2 * (1 + 1) = 4
-    .FILTER_RANGE(3'b001)
+    .FILTER_RANGE(3'b001) // minimum filter range
 ) pll_inst (
     .REFERENCECLK  (C7M),
     .PLLOUTGLOBAL  (clk_56m),
@@ -55,24 +55,16 @@ SB_PLL40_CORE #(
     .BYPASS        (1'b0)
 );
 
-/////////////////////////////////////////////////
-// Re-generated clocks @ 56 MHz                //
-/////////////////////////////////////////////////
-reg [7:0]  cck;
+// Resample actual CCK at 56MHz
+reg [7:0] cck;
+always @(posedge clk_56m) cck <= { cck[4:0], CCK };
 
-reg        r_cck_edge;
-reg        r_cckq_edge;
-reg        r_cdac_edge;
+wire w_cck_edge  = (cck[0] != cck[1]);                       // Lowres pixel clock
+wire w_cckq_edge = (cck[4] != cck[5]);                       // Hires pixel clock
+wire w_cdac_edge = (cck[2] != cck[3]) || (cck[6] != cck[7]); // Super-hires pixel clock
 
-always @(posedge clk_56m) begin    
-    r_cck_edge  <= (cck[0] != cck[1]);
-    r_cckq_edge <= (cck[4] != cck[5]);
-    r_cdac_edge <= (cck[2] != cck[3]) || (cck[6] != cck[7]);
-    cck         <= { cck[4:0], CCK };
-end
-
-wire w_cckq = cck[4];
-wire w_cck  = cck[0];
+wire w_cck  = cck[0]; // Recreate CCK (&&w_cck = rising, &&~w_cck = falling)
+wire w_cckq = cck[4]; // Recreate CCKQ
 
 /////////////////////////////
 // Instantiate Denise chip //
@@ -95,13 +87,14 @@ wire       w_blank_n;
 wire       w_sol;
 
 Denise denise(
-    // Clocks
+    // Clock
     .clk(clk_56m),
+    // Clock enables
     .cck(w_cck),
     .cckq(w_cckq),
-    .cck_edge(r_cck_edge),
-    .cckq_edge(r_cckq_edge),
-    .cdac_edge(r_cdac_edge),
+    .cck_edge(w_cck_edge),
+    .cckq_edge(w_cckq_edge),
+    .cdac_edge(w_cdac_edge),
 
     // Mouse/Joystick
     .m0h(M0H),
@@ -112,7 +105,7 @@ Denise denise(
     // Config
     .cfg_ecs(1'b1),
     .cfg_a1k(1'b0),
-    .pal_ntsc(), // ?
+    .pal_ntsc(),
 
     // Bus Input/Output
     .rga(w_rga),
